@@ -1,0 +1,29 @@
+.viewer-legend {
+    position:absolute;
+    top:0;
+    right:0;
+    padding-right: 1rem;    
+    padding-top: 1rem;    
+    color:gray;
+    z-index:300;
+    cursor: default;
+}
+
+.viewer-legend .svg-wrapper.expanded {
+    border: solid 2px gray;
+    border-radius: 15px;
+    padding-left: 1rem;
+    padding-top: 0.5rem;
+    visibility: visible;
+    align-items: flex-end;
+}
+
+.viewer-legend .svg-wrapper.reduced {   
+    visibility: hidden;
+}
+
+.viewer-legend .svg-wrapper svg text {
+    font-family: Verdana, Geneva, Tahoma, sans-serif;
+    font-size: '0.75rem';
+    color:gray;
+}

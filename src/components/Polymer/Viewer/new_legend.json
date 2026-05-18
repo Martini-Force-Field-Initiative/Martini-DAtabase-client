@@ -1,0 +1,8 @@
+{
+    "symbols" : [
+        { "category": "Amino acids"  , "symbol": "symbolCircle"},
+        { "category": "Nucleotides"  , "symbol": "symbolDiamond"},
+        { "category": "Others"       , "symbol": "symbolTriangle"},
+        { "category": "User defined", "symbol": "blurShape" }    
+    ]
+}

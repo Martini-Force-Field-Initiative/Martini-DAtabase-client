@@ -1,0 +1,162 @@
+{
+    "GLY" : 
+    {
+        "color" : "#FF0000" ,
+        "shape" : "symbolCircle"
+    },
+    "ALA": 
+    {
+        "color" : "#FF000" ,
+        "shape" : "symbolCircle"
+    },
+    "CYS": 
+    {
+        "color" : "#D15B5B" ,
+        "shape" : "symbolCircle"
+    },
+    "VAL": 
+    {
+        "color" : "#D1865B"   ,
+        "shape" : "symbolCircle"
+    },
+    "LEU": 
+    {
+        "color" : "#A94D18"   ,
+        "shape" : "symbolCircle"
+    },
+    "ILE": 
+    {
+        "color" : "#21A918"   ,
+        "shape" : "symbolCircle"
+    },
+    "MET": 
+    {
+        "color" : "#18A95C"   ,
+        "shape" : "symbolCircle"
+    },
+    "PRO": 
+    {
+        "color" : "#18A982"   ,
+        "shape" : "symbolCircle"
+    },
+    "HYP": 
+    {
+        "color" : "#187FA9"   ,
+        "shape" : "symbolCircle"
+    },
+    "ASN": 
+    {
+        "color" : "#1879A9"   ,
+        "shape" : "symbolCircle"
+    },
+    "GLN": 
+    {
+        "color" : "#1821A9"   ,
+        "shape" : "symbolCircle"
+    },
+    "ASP": 
+    {
+        "color" : "#7B61AE"   ,
+        "shape" : "symbolCircle"
+    },
+    "GLU": 
+    {
+        "color" : "#AE61A8"   ,
+        "shape" : "symbolCircle"
+    },
+    "THR": 
+    {
+        "color" : "#AE6176"   ,
+        "shape" : "symbolCircle"
+    },
+    "SER": 
+    {
+        "color" : "#ff0576"   ,
+        "shape" : "symbolCircle"
+    },
+    "LYS": 
+    {
+        "color" : "#9915FF"   ,
+        "shape" : "symbolCircle"
+    },
+    "ARG": 
+    {
+        "color" : "#12CCFF"   ,
+        "shape" : "symbolCircle"
+    },
+    "HIS": 
+    {
+        "color" : "#99CC23"   ,
+        "shape" : "symbolCircle"
+    },
+    "HIH": 
+    {
+        "color" : "#005CFF"   ,
+        "shape" : "symbolCircle"
+    },
+    "PHE": 
+    {
+        "color" : "#EB6B8D"   ,
+        "shape" : "symbolCircle"
+    },
+    "TYR": 
+    {
+        "color" : "#EBAA8D"   ,
+        "shape" : "symbolCircle"
+    },
+    "TRP": 
+    {
+        "color" : "#000000"   ,
+        "shape" : "symbolCircle"
+    },
+    "DEX": 
+    {
+        "color" : "#EB008D"   ,
+        "shape" : "hexagon"
+    },
+    "P3HT": 
+    {
+        "color" : "#000F00"   ,
+        "shape" : "symbolDiamond"
+    },
+    "PE": 
+    {
+        "color" : "#0F0000"   ,
+        "shape" : "symbolDiamond"
+    },
+    "PEO": 
+    {
+        "color" : "#0066cc"   ,
+        "shape" : "symbolDiamond"
+    },
+    "OHter": 
+    {
+        "color" : "#00BFFF"   ,
+        "shape" : "symbolCircle"
+    },
+    "PMA": 
+    {
+        "color" : "#BB0000"   ,
+        "shape" : "symbolDiamond"
+    },
+    "PMMA": 
+    {
+        "color" : "#BB550F"   ,
+        "shape" : "symbolDiamond"
+    },
+    "PS": 
+    {
+        "color" : "#00BB00"   ,
+        "shape" : "symbolDiamond"
+    },
+    "PSS": 
+    {
+        "color" : "#19F600"   ,
+        "shape" : "symbolCross"
+    },
+    "PVA": 
+    {
+        "color" : "#923000"   ,
+        "shape" : "symbolCross"
+    }
+}

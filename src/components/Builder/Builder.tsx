@@ -1,0 +1,2402 @@
+import React from "react";
+import {
+  withStyles,
+  Grid,
+  Typography,
+  Paper,
+  Button,
+  withTheme,
+  Theme,
+  CircularProgress,
+  Divider,
+  createTheme,
+  ThemeProvider,
+  Link,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+} from "@material-ui/core";
+import {
+  Marger,
+  FaIcon,
+  downloadBlob,
+  setPageTitle,
+  notifyError,
+} from "../../helpers";
+import { Link as RouterLink, RouteComponentProps } from "react-router-dom";
+
+import { Stage } from "@mmsb/ngl";
+import BallAndStickRepresentation from "@mmsb/ngl/declarations/representation/ballandstick-representation";
+import * as ngl from "@mmsb/ngl";
+
+import { toast } from "../Toaster";
+import { RepresentationParameters } from "@mmsb/ngl/declarations/representation/representation";
+import JSZip from "jszip";
+import { blue } from "@material-ui/core/colors";
+import { applyUserRadius } from "../../nglhelpers";
+import { STEPS } from "../../constants";
+import { v4 as uuid } from "uuid";
+import NglWrapper, { NglComponent, ViableRepresentation } from "./NglWrapper";
+import LoadPdb from "./ProteinBuilder/LoadPdb";
+import { MZError } from "./ProteinBuilder/MartinizeError";
+import MartinizeForm from "./ProteinBuilder/MartinizeForm";
+import MartinizeGenerated from "./ProteinBuilder/MartinizeGenerated";
+import GoEditor from "./ProteinBuilder/GoEditor";
+import GoBondsHelper from "./GoBondsHelper";
+import { BondsRepresentation } from "./BondsRepresentation";
+import BaseBondsHelper, { BondMember } from "./BaseBondsHelper";
+import ElasticBondsHelper from "./ElasticBondsHelper";
+import Settings, { LoginStatus } from "../../Settings";
+import EmbeddedError from "../Errors/Errors";
+import { errorToText, loadMartinizeFiles } from "../../helpers";
+import ApiHelper from "../../ApiHelper";
+import {
+  MartinizeFile,
+  MartinizeMode,
+  ReadedJobFiles,
+  ElasticOrGoBounds,
+  ReadedJobDoc,
+  AvailableForceFields,
+} from "../../types/entities";
+import { Alert } from "@material-ui/lab";
+import { itpBeads, Bead } from "./BeadsHelper";
+import BeadsLegend from "./BeadsLegend";
+import { getSocket } from "../../Socket";
+const socketClient = getSocket("Martinize"); // May have to work on that
+// @ts-ignore
+window.NGL = ngl;
+// @ts-ignore
+window.BaseBondsHelper = BaseBondsHelper;
+
+interface MBProps extends RouteComponentProps {
+  classes: Record<string, string>;
+  theme: Theme;
+  location: any;
+}
+
+export interface MartinizeFiles {
+  pdb: MartinizeFile;
+  itps: MartinizeFile[]; // One array of itps for each molecule of the system
+  radius: { [name: string]: number };
+  top: MartinizeFile;
+  goOrElastic?: BaseBondsHelper;
+  elastic_bonds?: BondsRepresentation;
+  warnings?: File;
+  gro?: MartinizeFile;
+}
+
+/*interface AtomRadius {
+  [atom: string]: number;
+}*/
+
+export interface MBState {
+  running:
+    | "pdb"
+    | "pdb_read"
+    | "martinize_params"
+    | "martinize_generate"
+    | "martinize_error"
+    | "done"
+    | "go_editor"
+    | "load_error"
+    | "load_history";
+  error?: any;
+  martinize_error?: MZError;
+  martinize_step: string;
+
+  all_atom_pdb?: File;
+  all_atom_ngl?: NglComponent;
+  chain_list: string[];
+  coarse_grain_pdb?: Blob;
+  coarse_grain_ngl?: NglComponent;
+  go_sites_ngl?: NglComponent;
+
+  builder_force_field: AvailableForceFields;
+  builder_mode: MartinizeMode;
+  builder_positions: "none" | "all" | "backbone";
+  builder_ef: string;
+  builder_el: string;
+  builder_eu: string;
+  builder_ea: string;
+  builder_ep: string;
+  builder_em: string;
+  builder_water_bias: [number, number, number];
+  cTer: string;
+  nTer: string;
+  sc_fix: string;
+  cystein_bridge: string;
+  idpField?: string;
+
+  advanced: string;
+  commandline: string;
+
+  all_atom_opacity: number;
+  all_atom_visible: boolean;
+  coarse_grain_opacity: number;
+  coarse_grain_visible: boolean;
+  go_sites_visible: boolean;
+  virtual_link_opacity: number;
+  virtual_link_visible: boolean;
+  representations: ViableRepresentation[];
+
+  files?: MartinizeFiles;
+  generating_files: boolean;
+  saved: string | false;
+  edited: boolean;
+  want_reset: boolean;
+  want_go_back: boolean;
+  want_go_tutorial: boolean;
+
+  theme: Theme;
+
+  version?: string;
+
+  load_error_message?: string;
+  send_mail: string;
+
+  bead_radius_factor: number;
+
+  polymer_number: number;
+
+  results_prefix: string;
+}
+
+/**
+ * The protein builder.
+ */
+class MartinizeBuilder extends React.Component<MBProps, MBState> {
+  state = this.original_state;
+
+  protected ngl_stage?: Stage;
+  protected ngl!: NglWrapper;
+
+  protected root = React.createRef<HTMLDivElement>();
+  protected go_back_btn = React.createRef<any>();
+  protected go_tuto_anchor = React.createRef<any>();
+  protected beads: Bead[] = [];
+
+  protected saved_viz_params?: {
+    aa_enabled: boolean;
+    cg_op: number;
+    cg_enabled: boolean;
+    vl_op: number;
+    vl_enabled: boolean;
+    representations: ViableRepresentation[];
+    goOrElastic: BaseBondsHelper;
+  };
+
+  protected jobId: string = "";
+
+  componentDidMount() {
+    setPageTitle("Molecule Builder");
+
+    if (Settings.logged === LoginStatus.None) {
+      return;
+    }
+
+    // @ts-ignore
+    window.MoleculeBuilder = this;
+
+    this.ngl = new NglWrapper("ngl-stage", {
+      backgroundColor: this.props.theme.palette.background.default,
+    });
+    this.changeCommandline("");
+    this.getMartinizeVersion();
+
+    if ("id" in this.props.match.params) {
+      //Reload an history job
+      const params = this.props.match.params as any;
+      const jobId = params.id;
+      this.setState({ running: "load_history" }, () =>
+        console.log(`RNG:${this.state.running}`),
+      );
+      this.loadFromHistory(jobId);
+    }
+  }
+
+  async loadFromHistory(jobId: string) {
+    try {
+      this.jobId = jobId;
+      const job: ReadedJobDoc = await ApiHelper.request(
+        `history/get?jobId=${jobId}`,
+      );
+      /*   console.warn("==>");
+      console.dir(job);
+      */
+      if (job.type === "polyply") {
+        this.reloadJobSettingsIntoStatePolyplyMockup(job);
+        const cg_files = await loadMartinizeFiles(job);
+        this.reloadJob(undefined, cg_files, undefined);
+      } else {
+        this.reloadJobSettingsIntoState(job);
+        const [allAtomFile, martinizeFiles, warnFile] = await Promise.all([
+          this.loadAllAtomFile(job.files),
+          loadMartinizeFiles(job),
+          this.loadWarnings(job.files),
+        ]);
+        this.reloadJob(allAtomFile, martinizeFiles, warnFile);
+      }
+    } catch (e) {
+      console.error("loadFromHistory has an error");
+      this.setState(
+        {
+          load_error_message: errorToText(e as any),
+          running: "load_error",
+        } /* ,
+        () => console.log(`RNG:${this.state.running}`) */,
+      );
+    }
+  }
+  reloadJobSettingsIntoStatePolyplyMockup(job: ReadedJobDoc) {
+    console.log("reloadJobSettingsIntoStatePolyplyMockup");
+    this.setState({
+      builder_force_field: job.settings.ff,
+      builder_mode: "classic",
+      builder_positions: "backbone",
+      builder_ef: this.original_state.builder_ef,
+      builder_el: this.original_state.builder_el,
+      builder_eu: this.original_state.builder_eu,
+      builder_ea: this.original_state.builder_ea,
+      builder_ep: this.original_state.builder_ep,
+      builder_em: this.original_state.builder_em,
+      nTer: "charged",
+      cTer: "charged",
+      sc_fix: "false",
+      cystein_bridge: "none",
+      results_prefix: job.name.split(".")[0],
+    });
+  }
+  reloadJobSettingsIntoState(job: ReadedJobDoc) {
+    this.setState({
+      builder_force_field: job.settings.ff,
+      builder_mode: job.settings.builder_mode,
+      builder_positions: job.settings.position,
+      builder_ef: job.settings.ef ?? this.original_state.builder_ef,
+      builder_el: job.settings.el ?? this.original_state.builder_el,
+      builder_eu: job.settings.eu ?? this.original_state.builder_eu,
+      builder_ea: job.settings.ea ?? this.original_state.builder_ea,
+      builder_ep: job.settings.ep ?? this.original_state.builder_ep,
+      builder_em: job.settings.em ?? this.original_state.builder_em,
+      nTer: job.settings.nter,
+      cTer: job.settings.cter,
+      sc_fix: job.settings.sc_fix.toString(),
+      cystein_bridge: job.settings.cystein_bridge,
+      results_prefix: job.name.split(".")[0],
+    });
+  }
+
+  async loadAllAtomFile(files: ReadedJobFiles): Promise<File> {
+    return new File([files.all_atom.content], files.all_atom.name, {
+      type: files.all_atom.type,
+    });
+  }
+
+  async loadWarnings(files: ReadedJobFiles): Promise<File> {
+    return new File([files.warnings.content], files.warnings.name, {
+      type: files.warnings.type,
+    });
+  }
+
+  async loadBonds(martinizeFiles: MartinizeFiles, mode: "go" | "elastic") {
+    //console.log(`[Builder:loadBonds] with mode ${mode}...`);
+    const goOrElastic =
+      mode === "go"
+        ? await GoBondsHelper.readFromItps(
+            this.ngl,
+            martinizeFiles.itps.flat().map((e: MartinizeFile) => e.content),
+          )
+        : mode === "elastic"
+          ? await ElasticBondsHelper.readFromItps(
+              this.ngl,
+              martinizeFiles.itps.map((e: MartinizeFile) => ({
+                content: e.content,
+                mol_idx: e.mol_idx,
+              })),
+            )
+          : undefined;
+
+    const elastic_bonds = goOrElastic?.representation;
+    return {
+      ...martinizeFiles,
+      elastic_bonds,
+      goOrElastic,
+    };
+  }
+
+  protected get original_state(): MBState {
+    return {
+      running: "pdb",
+      builder_force_field: "martini3001",
+      builder_mode: "classic",
+      builder_positions: "backbone",
+      builder_ef: "500",
+      builder_el: "0.5",
+      builder_eu: "0.9",
+      builder_ea: "0",
+      builder_ep: "0",
+      builder_em: "0",
+      builder_water_bias: [0, 0, 0],
+      cTer: "charged",
+      nTer: "charged",
+      sc_fix: "false",
+      cystein_bridge: "none",
+      advanced: "false",
+      commandline: "",
+      martinize_error: undefined,
+      coarse_grain_opacity: 1,
+      coarse_grain_visible: true,
+      go_sites_visible: true,
+      all_atom_visible: true,
+      all_atom_opacity: 0.3,
+      virtual_link_opacity: 0.2,
+      virtual_link_visible: true,
+      generating_files: false,
+      representations: ["ball+stick"],
+      theme: this.createTheme("light"),
+      saved: false,
+      edited: false,
+      want_reset: false,
+      want_go_back: false,
+      want_go_tutorial: false,
+      error: undefined,
+      martinize_step: "",
+      send_mail: "false",
+      bead_radius_factor: 0.2,
+      polymer_number: 0,
+      results_prefix: "output",
+      chain_list: [],
+      idpField: undefined,
+    };
+  }
+
+  async reloadJob(
+    allAtomFile: File | undefined,
+    martinizeFiles: MartinizeFiles,
+    warnFile: File | undefined,
+  ) {
+    try {
+      const builder_mode = this.state.builder_mode;
+      const completeFiles =
+        builder_mode === "go" || builder_mode === "elastic"
+          ? await this.loadBonds(martinizeFiles, builder_mode)
+          : martinizeFiles;
+      completeFiles.warnings = warnFile;
+      // XXXXX
+      if (allAtomFile !== undefined)
+        if (allAtomFile?.size !== 0) this.initAllAtomPdb(allAtomFile!);
+
+      this.initCoarseGrainPdb({
+        files: completeFiles,
+        mode: builder_mode === "classic" ? undefined : builder_mode,
+      });
+      this.setState({ files: completeFiles });
+    } catch (e) {
+      notifyError(e as any);
+    }
+  }
+
+  reset() {
+    if (this.ngl) this.ngl.reset();
+    this.setState(this.original_state);
+    this.changeCommandline("");
+    this.changeTheme("light");
+  }
+
+  /* SET SETTINGS FOR REPRESENTATIONS */
+
+  setCoarseGrainRepresentation(
+    parameters: Partial<RepresentationParameters>,
+    representationType?: ViableRepresentation[],
+  ) {
+    for (const repr of this.state.coarse_grain_ngl!.representations) {
+      if (
+        !representationType ||
+        representationType.includes(repr.name as ViableRepresentation)
+      ) {
+        repr.set(parameters);
+      }
+    }
+  }
+
+  setAllAtomRepresentation(parameters: Partial<RepresentationParameters>) {
+    for (const repr of this.state.all_atom_ngl!.representations) {
+      repr.set(parameters);
+    }
+  }
+
+  createTheme(hint: "light" | "dark") {
+    const bgclr = hint === "dark" ? "#303030" : "#fafafa";
+
+    return createTheme({
+      palette: {
+        type: hint,
+        background: {
+          default: bgclr,
+        },
+        primary: hint === "dark" ? { main: blue[600] } : undefined,
+      },
+    });
+  }
+
+  changeTheme(hint: "light" | "dark") {
+    const theme = this.createTheme(hint);
+
+    this.setState({
+      theme,
+    });
+
+    this.ngl.set({ backgroundColor: theme.palette.background.default });
+  }
+
+  async initCoarseGrainPdb(options: {
+    files: MartinizeFiles;
+    mode?: "go" | "elastic";
+  }) {
+    /*
+    console.warn("initCoarseGrainPdb");
+    console.dir(options);
+    console.log(options.files.pdb.content);
+    console.log(options.files);
+    console.log(await options.files.pdb.content.text());
+    */
+    let component: NglComponent;
+    const polarizableFF =
+      Settings.martinize_variables.force_fields_info[
+        this.state.builder_force_field
+      ].polarizable;
+    this.beads = await itpBeads(
+      options.files.top.content,
+      options.files.itps.map((itp) => itp.content),
+      polarizableFF,
+      options.mode,
+    );
+    // Apply the NGL radius
+    applyUserRadius(options.files.radius);
+    try {
+      component = await this.ngl.load(options.files.pdb.content, {
+        coarse_grained: true,
+      });
+    } catch (e) {
+      console.error(e);
+      toast(
+        "Unable to load generated PDB. Please retry by re-loading the page.",
+      );
+      return;
+    }
+    //console.log("ngl.load passed");
+    const cg_ngl_settings = {
+      radius: true,
+      color: true,
+      beads: this.beads,
+      ff: this.state.builder_force_field,
+      radiusFactor: this.state.bead_radius_factor,
+    };
+    /*
+    console.log("[initCoarseGrainPdb] CG_NGL settings");
+    console.dir(cg_ngl_settings);
+    */
+    const repr = component.add<BallAndStickRepresentation>(
+      "ball+stick",
+      undefined, // { sele: "not .CA" },
+      cg_ngl_settings,
+    );
+
+    /*   console.error("Tryin to hide CA");
+    repr.applySelection("all");
+    repr.set({ visible: false });
+    repr.applySelection("all");
+    */
+    component.center(500);
+
+    if (this.state.all_atom_ngl)
+      this.setAllAtomRepresentation({ opacity: 0.3 });
+
+    if (options.mode) {
+      repr.atomIterator((ap) => {
+        options.files.goOrElastic?.representation.registerAtomProxy(ap);
+      });
+
+      // Init the bond helper
+      if (
+        (options.mode === "go" || options.mode === "elastic") &&
+        options.files.goOrElastic
+      ) {
+        options.files.goOrElastic.stringifyChainIdBonds();
+        /*   console.log(
+          `[Builder:initCoarseGrainPdb] Status of the ${options.mode}.representation`,
+        );
+
+        console.log(options.files);
+        console.log(options.files.goOrElastic.representation);
+        console.log(
+          `[Builder:initCoarseGrainPdb] trying to ${options.mode}.render`,
+        );
+        */
+        options.files.goOrElastic.render();
+        options.files.goOrElastic.freeze();
+      }
+    }
+    /*
+    console.warn("initCoarseGrainPdb NGL startup completed, setting states");
+    console.dir("options.file.pdb");
+    console.dir(options.files.pdb);
+    console.dir("options.file.pdb.content");
+    console.dir(options.files.pdb.content);
+    console.dir("coarse_grain_ngl: component");
+    console.dir(component);
+    console.dir("Builder.state");
+    console.dir(this.state);
+ */
+    // Register the component
+    this.setState(
+      {
+        running: "done",
+        coarse_grain_pdb: options.files.pdb.content,
+        coarse_grain_ngl: component,
+      } /*, () => console.log(`RNG:${this.state.running}`)*/,
+    );
+
+    //console.warn("initCoarseGrainPdb Completed");
+  }
+  /**
+   * Reads in a pdb structure ensuring it is safe for martinize to process it
+   */
+  async initAllAtomPdb(file: File) {
+    /*
+    console.warn("initAllAtomPdb");
+    console.dir(file);
+    */
+    const component = await this.ngl.load(file, { coarse_grained: false });
+
+    const repr = component.add<BallAndStickRepresentation>("ball+stick");
+    component.center();
+
+    // Register the component
+    this.setState({
+      all_atom_ngl: component,
+      all_atom_pdb: file,
+      polymer_number: repr.polymerNumber,
+      chain_list: repr.chainNamesList,
+      results_prefix: file.name.split(".")[0],
+    });
+  }
+
+  /* ADD OR REMOVE GO BONDS
+    go.goIndexToRealIndex --> check the offset
+  */
+  async addOrRemoveVBond(options: {
+    mode: "add" | "remove";
+    /** For adding or removing a single bond. */
+    target?: [number, number];
+    /** For removing all nodes from atom */
+    target_single?: number;
+    /** For adding or all bonds between the set. */
+    target_ensembl?: [Set<string>, Set<string> | undefined];
+    /** For removing or all bonds between the set. */
+    targetBondEnsembl?: [BondMember, BondMember, string][];
+    /** Enable history push. */
+    enable_history?: boolean;
+    chain?: [number | string, number | string];
+    chain_single?: number | string;
+  }) {
+    console.warn(`[Builder:addOrRemoveVBond] w/ options:`);
+    console.warn(options);
+    if (!this.state.files || !this.state.files.goOrElastic) return;
+
+    const {
+      target,
+      target_single,
+      target_ensembl,
+      chain,
+      chain_single,
+      targetBondEnsembl,
+    } = options;
+
+    if (
+      target === undefined &&
+      target_single === undefined &&
+      target_ensembl === undefined &&
+      targetBondEnsembl === undefined
+    )
+      throw new Error("No target");
+
+    const files = this.state.files;
+
+    let goOrElastic = files.goOrElastic! as GoBondsHelper;
+
+    if (options.enable_history !== false) {
+      goOrElastic.historyPush();
+    }
+
+    if (options.mode === "add") {
+      // TO CHECK -> IDTCLS SYNCING W/ VALIDATE
+      console.warn("[Builder:addOrRemoveVBond] add logic");
+      if (target !== undefined && chain !== undefined) {
+        // DONE
+        console.warn("[Builder:addOrRemoveVBond] single bond");
+        //Add a single bond
+        const atom1 = goOrElastic.goIndexToRealIndex(target[0]) as number;
+        const atom2 = goOrElastic.goIndexToRealIndex(target[1]) as number;
+
+        const [chain1, chain2] = chain;
+        goOrElastic.add(
+          chain1,
+          atom1,
+          chain2,
+          atom2,
+          goOrElastic.createRealLine(atom1, atom2),
+        );
+        goOrElastic.addCustomBonds(chain1, atom1, chain2, atom2);
+      }
+      //DONE
+      else if (
+        target_ensembl !== undefined &&
+        target_ensembl[1] !== undefined
+      ) {
+        /*
+        console.log("[Builder:addOrRemoveVBond] Add bonds between two sets");
+        console.dir(target_ensembl[0]);
+        console.dir(target_ensembl[1]);
+        console.log('Rosetta');
+        console.log( (goOrElastic as GoBondsHelper).index_to_real);
+        */
+        const _index1 = Array.from(target_ensembl[0]).map((e) =>
+          parseInt(e.split(":")[1]),
+        );
+        //.map( i => go.goIndexToRealIndex(i));
+        const _index2 = Array.from(target_ensembl[1]).map((e) =>
+          parseInt(e.split(":")[1]),
+        );
+        //.map( i => go.goIndexToRealIndex(i));
+        const chain1 = Array.from(target_ensembl[0]).map(
+          (e) => e.split(":")[0],
+        );
+        const chain2 = Array.from(target_ensembl[1]).map(
+          (e) => e.split(":")[0],
+        );
+
+        /*
+        console.log(`[Builder:addOrRemoveVBond] 'add' got two indexes sets`);
+        console.log(_index1);
+        console.log(_index2);
+      */
+        // Add line between each element of set
+        for (const [i, atom1] of _index1.entries()) {
+          for (const [j, atom2] of _index2.entries()) {
+            if (atom1 === atom2)
+              throw new Error(
+                `Self link addition (${atom1}, ${atom2}) through add Bond between two sets`,
+              );
+            goOrElastic.add(
+              chain1[i],
+              atom1,
+              chain2[j],
+              atom2,
+              goOrElastic.createRealLine(atom1, atom2),
+            );
+            goOrElastic.addCustomBonds(chain1[i], atom1, chain2[j], atom2);
+          }
+        }
+      }
+      //DONE
+      else if (
+        target_ensembl !== undefined &&
+        target_ensembl[1] === undefined
+      ) {
+        //console.log("[Builder:addOrRemoveVBond] Add bonds inside one set");
+        const _index = Array.from(target_ensembl[0]).map((e) =>
+          parseInt(e.split(":")[1]),
+        );
+        //.map( i => go.goIndexToRealIndex(i));
+        const chain = Array.from(target_ensembl[0]).map((e) => e.split(":")[0]);
+        //let m = 0;
+        for (let i = 0; i < _index.length - 1; i++) {
+          for (let j = i + 1; j < _index.length; j++) {
+            // Skip if already existing TODO
+            if (
+              goOrElastic.bondExists(
+                { chain: chain[i], realIdx: _index[i] },
+                { chain: chain[j], realIdx: _index[j] },
+              )
+            ) {
+              //console.log("skippy");
+              continue;
+            }
+            goOrElastic.add(
+              chain[i],
+              _index[i],
+              chain[j],
+              _index[j],
+              goOrElastic.createRealLine(_index[i], _index[j]),
+            );
+            goOrElastic.addCustomBonds(
+              chain[i],
+              _index[i],
+              chain[j],
+              _index[j],
+            );
+            //     m++;
+          }
+        }
+        //console.warn("l, M",_index.length, m);
+      }
+    } else {
+      //REMOVE --> NEEDS TO BE SYNCED W/ VALIDATE IDENTICALLY IN 3 ABOVE CASES
+      // DONE
+      if (target !== undefined) {
+        //console.log(`[Builder:addOrRemoveVBond] REMOVE pairs ${options.target},${options.chain}`);
+        // Source&Target are REAL ATOM index
+        // Remove a single bond
+        //const [name1, name2] = target.map(e => (goOrElastic as GoBondsHelper).realIndexToGoName(e));
+        /*
+        console.log(`[Builder:addOrRemoveVBond] REMOVE GO indexed pairs ${name1}, ${name2}`);
+        console.log("Rel TO del from")
+        console.dir(goOrElastic.relations);
+        console.log(`Trying to access ${chain?chain[0]:0}:${target[0]}, ${chain?chain[1]:0}:${target[1]}`);
+        console.log(goOrElastic.relations.get(`${chain?chain[0]:0}:${target[0]}`, `${chain?chain[1]:0}:${target[1]}`));
+        */
+        goOrElastic.remove(
+          chain ? chain[0] : 0,
+          target[0],
+          chain ? chain[1] : 0,
+          target[1],
+        );
+        goOrElastic.rmCustomBonds(
+          chain ? chain[0] : 0,
+          target[0],
+          chain ? chain[1] : 0,
+          target[1],
+        );
+      }
+      // DONE
+      else if (target_single !== undefined) {
+        // INDEX are GO Index + 1
+        // Remove every bond from this atom
+        const ch_sgl: number | string = chain_single ? chain_single : 0;
+        /*
+        console.log(`[Builder:addOrRemoveVBond] REMOVE all bonds from this atom ${target_single},${ch_sgl}`);
+        console.log("It should be a GoIndex incoming ^^");
+       */
+        //console.dir(go.relations);
+        const realI = (goOrElastic as GoBondsHelper).goIndexToRealIndex(
+          target_single,
+        );
+        //const partners = go.findBondsOf(target_single, ch_sgl);
+        //console.log(`Trying to goOrElastic.remove(${ch_sgl}, ${realI})`);
+        goOrElastic.remove(ch_sgl, realI);
+        goOrElastic.rmCustomBonds(ch_sgl, realI);
+
+        //DONE
+      } else {
+        if (targetBondEnsembl === undefined)
+          throw new Error("[Builder:addOrRemoveVBond]This should not happen");
+        /*
+        console.log(`[Builder:addOrRemoveVBond] REMOVE following bonds (from ensembl operations)`);
+        console.log(targetBondEnsembl);
+        */
+        targetBondEnsembl.forEach((d) => {
+          const [a1, a2, _] = d;
+          goOrElastic.remove(a1.chain, a1.realIdx, a2.chain, a2.realIdx);
+          goOrElastic.rmCustomBonds(a1.chain, a1.realIdx, a2.chain, a2.realIdx);
+        });
+      }
+    }
+    //GLA-TODO
+    //go.render(this.state.virtual_link_opacity);
+
+    this.setState({
+      edited: true,
+    });
+  }
+
+  // highlight is a number(aka:atom index) highlight all bonds involving indexed atom, in call context index is a goIdx
+  // highlight is a [number,number] -> specific bond to highlight, in call context these are realIdx
+  // highlight is a [number,number][] -> list of bonds to highlight
+  // h_chains can be [number, number] -> bond
+  redrawVBonds = (
+    highlight?:
+      | [virtPartIdx: number, virtPartIdx: number]
+      | number
+      | [virtPartIdx: number, virtPartIdx: number][],
+    opacity?: number,
+    h_chains?:
+      | number
+      | string
+      | [number, number]
+      | [string, string]
+      | [number, number][]
+      | [string, string][],
+  ) => {
+    let realHighlightIdx = highlight;
+    //console.log(`[Builder:redrawVBonds] inputs atom_num ${highlight} chain_num:${h_chains}`);
+    let mode = "oneAtom";
+    if (typeof highlight === "number") {
+      //console.log(`[Builder:redrawVBonds] single number conversion ...`)
+      // transform virt_part_index to real_atom_index
+      realHighlightIdx = (
+        this.state.files!.goOrElastic! as GoBondsHelper
+      ).goIndexToRealIndex(highlight);
+      //realHighlightIdx = nglAtom - 1;
+      //console.log(`[Builder:redrawVBonds] single number virt_part_to_real index conversion from ${highlight} to ${realHighlightIdx}`);
+    }
+
+    let h1 = 0,
+      h2 = 0;
+    let c1: string | number = 0,
+      c2: string | number = 0;
+    if (Array.isArray(realHighlightIdx)) {
+      if (realHighlightIdx.length === 0) {
+        //console.warn("[Builder::redrawVBonds] Empty highlight selection");
+        return;
+      }
+      if (
+        typeof realHighlightIdx[0] === "number" &&
+        typeof realHighlightIdx[1] === "number"
+      ) {
+        mode = "onePair";
+        [h1, h2] = realHighlightIdx;
+        if (!Array.isArray(h_chains))
+          throw new Error(
+            `[Builder:redrawVBonds] wrong chain specifications ${h_chains} which should be an array as atom index isa an array ${realHighlightIdx}`,
+          );
+        if (
+          (typeof h_chains[0] === "number" &&
+            typeof h_chains[1] === "number") ||
+          (typeof h_chains[0] === "string" && typeof h_chains[1] === "string")
+        )
+          [c1, c2] = h_chains;
+        else
+          throw new Error(
+            `[Builder:redrawVBonds] wrong chain specifications ${h_chains} which should be an array of string/number as atom index isa an array ${realHighlightIdx}`,
+          );
+      } else if (Array.isArray(realHighlightIdx[0])) {
+        mode = "manyPairs";
+        if (!Array.isArray(h_chains))
+          throw new Error("Builder::redrawVBonds unknown chain specifications");
+        else if (h_chains.length !== realHighlightIdx.length)
+          throw new Error(
+            "Builder::redrawVBonds uneven chain/atom specifications",
+          );
+      } else {
+        throw new Error("Builder::redrawVBonds unknown atom specifications");
+      }
+    } else if (
+      typeof realHighlightIdx === "number" &&
+      typeof h_chains === "string"
+    ) {
+      // We brute exclude number, until elastic implem
+      // Highlight every link from highlight go atom
+      h1 = realHighlightIdx;
+      c1 = h_chains;
+      //console.log(`Builder:redrawVBonds] Highlight every link from real particule index, chain: ${h1} ${c1}`);
+    } else {
+      // TO RESUME HERE : this breaks single atoom selection, maybe it should not be called on sinlge atom click
+      console.log(`Builder:redrawVBonds] Empty selection`);
+
+      //throw(`[Builder:redrawGoBonds] unexpected single atom selector combo (${typeof realHighlightIdx} ${typeof h_chains}) ${realHighlightIdx} ${h_chains}`);
+    }
+
+    // TODO improve
+    // predicate appplied top bonds
+    const predicate =
+      realHighlightIdx !== undefined
+        ? (
+            atom1: number,
+            atom2: number,
+            chain1: number | string,
+            chain2: number | string,
+          ) => {
+            //console.log(`[Builder:redrawVBonds::predicate] ${atom1}, ${chain1} : ${atom2}, ${chain2}`);
+            // Test current pair vs all seeked
+            if (
+              mode === "manyPairs" &&
+              Array.isArray(realHighlightIdx) &&
+              Array.isArray(h_chains)
+            ) {
+              for (let i = 0; i < realHighlightIdx.length; i++) {
+                const [h1, h2] = realHighlightIdx[i] as [number, number];
+                const [c1, c2] = h_chains[i] as [
+                  number | string,
+                  number | string,
+                ];
+                if (
+                  (atom1 === h1 &&
+                    chain1 == c1 &&
+                    atom2 === h2 &&
+                    chain2 === c2) ||
+                  (atom2 === h1 &&
+                    chain2 == c1 &&
+                    atom1 === h2 &&
+                    chain1 === c2)
+                )
+                  return true;
+              }
+              return false;
+            }
+            // Test current pair vs the one seeked
+            if (realHighlightIdx && Array.isArray(realHighlightIdx)) {
+              //console.log(`[Builder:redrawVBonds::predicate] seeked pair ({${h1},${c1}}, {${h2},${c2}}) lookup pair ({${atom1},${chain1}}, {${atom2},${chain2}})`)
+              return (
+                (atom1 === h1 &&
+                  chain1 == c1 &&
+                  atom2 === h2 &&
+                  chain2 === c2) ||
+                (atom2 === h1 && chain2 == c1 && atom1 === h2 && chain1 === c2)
+              );
+            }
+            // Highlight is a number,we check that visited src or target match atom index and chain index|label
+            else if (h1) {
+              //console.log(`[Builder:redrawVBonds::predicate] seeked single atom from links {${h1},${c1}} lookup link atoms pairs  ({${atom1},${chain1}}, {${atom2},${chain2}})`)
+              return (
+                (atom1 === h1 && chain1 === c1) ||
+                (atom2 === h1 && chain2 === c1)
+              );
+            }
+
+            return false;
+          }
+        : undefined;
+
+    this.state.files!.goOrElastic!.render(
+      opacity ?? this.state.virtual_link_opacity,
+      predicate,
+    );
+  };
+
+  setSchemeIdColorForCg = (
+    atomColors?: { [virtualPartIndex: number]: string } /*|
+                                        { [chainIdx: number]: {[atomIdx:number]:string} }*/,
+  ) => {
+    /*
+    console.log(`[Builder:setSChemeIdColorForCg] input:`);
+    console.log(atomColors);
+    */
+    // Convert to ngl index
+    const atomColorIdx: { [nglGoIdx: number]: string } = {};
+    for (let _ in atomColors) {
+      const vpi = parseInt(_);
+      atomColorIdx[vpi - 1] = atomColors[vpi];
+    }
+    const schemeId = atomColors
+      ? this.state.coarse_grain_ngl!.martiniSchemes.highlightAtomColorScheme(
+          this.state.builder_force_field,
+          atomColorIdx,
+        )
+      : this.state.coarse_grain_ngl!.martiniSchemes.getRegisteredColorSchemeId(
+          this.state.builder_force_field,
+        );
+    for (const repr of this.state.coarse_grain_ngl!.representations) {
+      repr.set({
+        colorScheme: "element",
+        color: schemeId,
+      });
+    }
+  };
+
+  restoreSettingsAfterGo(revert_go_changes: boolean) {
+    console.log("[Builder:restoreSettingsAfterGo] Firing");
+    // Restore all settings
+    if (this.saved_viz_params) {
+      const {
+        aa_enabled,
+        vl_enabled,
+        vl_op,
+        cg_op,
+        cg_enabled,
+        representations,
+      } = this.saved_viz_params;
+
+      this.onRepresentationChange(undefined, representations);
+      const goOrElastic = this.state.files!.goOrElastic!;
+
+      goOrElastic.representation.set({ opacity: vl_op });
+      this.setCoarseGrainRepresentation({ opacity: cg_op });
+
+      for (const repr of this.state.coarse_grain_ngl!.representations) {
+        repr.visible = cg_enabled;
+      }
+      for (const repr of this.state.all_atom_ngl!.representations) {
+        repr.visible = aa_enabled;
+      }
+      goOrElastic.representation.visible = vl_enabled;
+
+      this.setState({ virtual_link_opacity: vl_op });
+
+      if (revert_go_changes) {
+        this.state.files!.goOrElastic = this.saved_viz_params.goOrElastic;
+        this.state.files!.goOrElastic.render(vl_op);
+      }
+    }
+
+    this.setState({ running: "done" }, () =>
+      console.log(`RNGx:${this.state.running}`),
+    ); // This triggers b4 modal display inside GoEditor
+  }
+
+  handleMartinizeBegin = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const form_data: any = {};
+    const s = this.state;
+
+    //Check if we have merge option in commandline, it's forbidden for elastic network or go model for now
+
+    form_data.ff = s.builder_force_field;
+    form_data.position = s.builder_positions;
+    form_data.cter = s.cTer;
+    form_data.nter = s.nTer;
+    form_data.sc_fix = s.sc_fix;
+    form_data.cystein_bridge = s.cystein_bridge;
+
+    if (s.builder_mode === "elastic") {
+      form_data.elastic = "true";
+      form_data.ef = s.builder_ef;
+      form_data.el = s.builder_el;
+      form_data.eu = s.builder_eu;
+      form_data.ea = s.builder_ea;
+      form_data.ep = s.builder_ep;
+      form_data.em = s.builder_em;
+      form_data.water_bias = s.builder_water_bias;
+      form_data.chain_list = s.chain_list;
+    } else if (s.builder_mode === "go") {
+      form_data.use_go = "true";
+      form_data.sc_fix = "true";
+      form_data.water_bias = s.builder_water_bias;
+    }
+    form_data.builder_mode = s.builder_mode;
+    form_data.send_mail = s.send_mail;
+    form_data.user_id = Settings.user?.id;
+    form_data.pdb_name = s.all_atom_pdb?.name;
+
+    // Only fill idp_fields if martini3IDP is set as ff
+    // Preparing form content for IDP
+    form_data.idp_fields =
+      form_data.ff === "martini3IDP" ? s.idpField : undefined;
+    /*
+    form_data.ff =
+      form_data.idp_fields !== undefined ? "martini3IDP" : form_data.ff;
+      */
+
+    this.setState(
+      {
+        running: "martinize_generate",
+        error: undefined,
+        martinize_error: undefined,
+      } /* ,
+      () => console.log(`RNG:${this.state.running}`),
+      */,
+    );
+
+    const pdb_content = (await new Promise((resolve, reject) => {
+      const fr = new FileReader();
+
+      fr.onload = () => {
+        resolve(fr.result as ArrayBuffer);
+      };
+
+      fr.onerror = reject;
+
+      fr.readAsArrayBuffer(s.all_atom_pdb!);
+    })) as ArrayBuffer;
+    const RUN_ID = uuid();
+
+    const setMartinizeStep = (str: string) => {
+      this.setState({ martinize_step: str });
+    };
+
+    const files: MartinizeFiles | undefined = await new Promise<MartinizeFiles>(
+      (resolve, reject) => {
+        const files: Partial<MartinizeFiles> = {};
+
+        // Begin the run
+        socketClient.emit(
+          "martinize",
+          Buffer.from(pdb_content),
+          RUN_ID,
+          form_data,
+        );
+        this.setState({ martinize_step: "Sending your files to server" });
+        /*  console.warn("Data sent to Martinize");
+        console.warn(form_data);
+        console.dir(pdb_content);
+        console.log(RUN_ID);
+        */
+        // Martinize step
+        socketClient.on(
+          "martinize step",
+          ({ step, id }: { step: string; id: string }) => {
+            if (id !== RUN_ID) {
+              return;
+            }
+
+            switch (step) {
+              case STEPS.STEP_MARTINIZE_INIT:
+                setMartinizeStep("Running Vermouth-Martinize");
+                break;
+              case STEPS.STEP_MARTINIZE_ENDED_FINE:
+                setMartinizeStep("Martinize run ended fine");
+                break;
+              case STEPS.STEP_MARTINIZE_GET_CONTACTS:
+                setMartinizeStep("Getting contact map for molecule");
+                break;
+              case STEPS.STEP_MARTINIZE_GO_SITES:
+                setMartinizeStep("Creating virtual Go sites");
+                break;
+              case STEPS.STEP_MARTINIZE_GROMACS:
+                setMartinizeStep("Compiling bonds inside PDB file");
+                break;
+            }
+          },
+        );
+
+        // File upload
+        socketClient.on(
+          "martinize download",
+          (
+            {
+              id,
+              name,
+              type,
+              mol_idx,
+            }: { id: string; name: string; type: string; mol_idx: number },
+            file: ArrayBuffer,
+            ok_cb: Function,
+          ) => {
+            if (id !== RUN_ID) {
+              return;
+            }
+            setMartinizeStep("Downloading results");
+
+            switch (type) {
+              case "chemical/x-pdb": {
+                // pdb file
+                files.pdb = {
+                  name,
+                  content: new File([file], name, { type }),
+                  type,
+                };
+                break;
+              }
+              case "chemical/x-gro": {
+                files.gro = {
+                  name,
+                  content: new File([file], name, { type }),
+                  type,
+                };
+                break;
+              }
+              case "chemical/x-topology": {
+                // TOP file
+                files.top = {
+                  name,
+                  content: new File([file], name, { type }),
+                  type,
+                };
+                break;
+              }
+              case "chemical/x-include-topology": {
+                // ITP file
+                if (!files.itps) {
+                  files.itps = [];
+                }
+
+                files.itps.push({
+                  name,
+                  content: new File([file], name, { type }),
+                  type,
+                  mol_idx,
+                });
+                break;
+              }
+              case "martinize-warnings": {
+                files.warnings = new File([file], name, { type });
+              }
+            }
+
+            ok_cb();
+          },
+        );
+
+        // Run error
+        socketClient.on(
+          "martinize error",
+          (
+            {
+              id,
+              error,
+              type,
+              stack,
+            }: { id: string; error: string; type?: string; stack: string },
+            raw_run?: ArrayBuffer,
+          ) => {
+            if (id !== RUN_ID) {
+              return;
+            }
+
+            reject({ id, error, type, raw_run, stack });
+          },
+        );
+
+        // Before end send
+        socketClient.on("martinize before end", ({ id }: { id: string }) => {
+          if (id !== RUN_ID) {
+            return;
+          }
+
+          setMartinizeStep("Finishing...");
+        });
+
+        // When run ends
+        socketClient.on(
+          "martinize end",
+          ({
+            id,
+            elastic_bonds,
+            radius,
+            savedToHistory,
+            jobId,
+          }: {
+            id: string;
+            elastic_bonds?: ElasticOrGoBounds[];
+            radius: { [name: string]: number };
+            savedToHistory: boolean;
+            jobId: string;
+          }) => {
+            if (id !== RUN_ID) {
+              return;
+            }
+
+            //console.warn("SOCKET on [martinize end]");
+            this.jobId = jobId;
+            files.radius = radius;
+
+            if (elastic_bonds) {
+              files.elastic_bonds = new BondsRepresentation(this.ngl);
+              files.elastic_bonds.bonds = elastic_bonds;
+            }
+
+            if (savedToHistory)
+              toast("Your job has been saved to history", "success");
+            else
+              toast(
+                "Your job can't be saved to history. An error occured with the server.",
+                "warning",
+              );
+            resolve(files as MartinizeFiles);
+          },
+        );
+      },
+    ).catch((error) => {
+      this.setState(
+        {
+          running: "martinize_error",
+          martinize_step: "",
+          martinize_error: error,
+        } /*,
+        () => console.log(`RNG:${this.state.running}`),
+        */,
+      );
+
+      return undefined;
+    });
+
+    //socketClient.disconnect(); // Don't do that, as it prvents restarting builder and resubmit
+
+    if (!files) {
+      return;
+    }
+
+    if (s.builder_mode === "go") {
+      //console.error("-->Init go Sites or Elastic");
+      // Init go sites
+      const bonds = await GoBondsHelper.readFromItps(
+        this.ngl,
+        files.itps.map((e) => e.content),
+      );
+      files.goOrElastic = bonds;
+    } else if (s.builder_mode === "elastic") {
+      // Init elastic
+      //console.error("Init Elastic");
+      const bonds = await ElasticBondsHelper.readFromItps(
+        this.ngl,
+        files.itps.map((e) => ({ mol_idx: e.mol_idx, content: e.content })),
+      );
+      files.goOrElastic = bonds;
+    }
+
+    this.setState({ files, martinize_step: "" });
+
+    //const mode = s.builder_mode === 'elastic' ? 'elastic' : (s.builder_mode === "go" ? 'go' : undefined);
+    const mode = files.elastic_bonds
+      ? "elastic"
+      : s.builder_mode === "go"
+        ? "go"
+        : undefined;
+
+    this.initCoarseGrainPdb({
+      files,
+      mode,
+    });
+  };
+
+  onFileSelect = (_file: File) => {
+    /* Sanitized the uploaded filename and then load it in NGL
+    (May not be supported by IE & Edge plus Opera for Android)
+    */
+    const safeFilename = _file.name.replace(/[^a-z0-9\.]/gi, "_").toLowerCase();
+    const file = new File([_file], safeFilename, { type: _file.type });
+
+    // Mount the PDB in NGL
+    this.setState(
+      {
+        running: "pdb_read",
+      },
+      /* ,
+      () => console.log(`RNG:${this.state.running}`),
+      */
+    );
+
+    this.initAllAtomPdb(file)
+      .then(() => {
+        this.setState(
+          {
+            running: "martinize_params",
+          } /*,
+          () => console.log(`RNG:${this.state.running}`),
+           */,
+        );
+      })
+      .catch((e: any) => {
+        console.error(e);
+        this.setState(
+          {
+            running: "pdb",
+            error: e,
+          } /* ,
+          () => console.log(`RNG:${this.state.running}`),
+          */,
+        );
+      });
+  };
+
+  onAllAtomOpacityChange = (_: any, value: number | number[]) => {
+    if (Array.isArray(value)) {
+      value = value[0];
+    }
+
+    this.setState({
+      all_atom_opacity: value / 100,
+    });
+
+    this.setAllAtomRepresentation({ opacity: value / 100 });
+  };
+
+  onAllAtomVisibilityChange = (_: any, checked: boolean) => {
+    for (const repr of this.state.all_atom_ngl!.representations) {
+      repr.visible = checked;
+    }
+
+    this.setState({ all_atom_visible: checked });
+  };
+
+  onCoarseGrainedOpacityChange = (_: any, value: number | number[]) => {
+    if (Array.isArray(value)) {
+      value = value[0];
+    }
+
+    this.setState({
+      coarse_grain_opacity: value / 100,
+    });
+
+    this.setCoarseGrainRepresentation({ opacity: value / 100 });
+  };
+
+  onCoarseGrainedVisibilityChange = (_: any, checked: boolean) => {
+    for (const repr of this.state.coarse_grain_ngl!.representations) {
+      repr.visible = checked;
+    }
+
+    this.setState({ coarse_grain_visible: checked });
+  };
+
+  onGoSiteVisibilityChange = (_: any, checked: boolean) => {
+    this.setState({ go_sites_visible: checked });
+    for (const repr of this.state.coarse_grain_ngl!.representations) {
+      repr.representation.setSelection(checked ? "all" : "not .CA");
+    }
+  };
+
+  onVirtualLinksOpacityChange = (_: any, value: number | number[]) => {
+    if (Array.isArray(value)) {
+      value = value[0];
+    }
+    this.setState({
+      virtual_link_opacity: value / 100,
+    });
+
+    if (this.state.files?.goOrElastic) {
+      this.state.files.goOrElastic.representation.set({ opacity: value / 100 });
+    }
+    /*
+    else if (this.state.files?.elastic_bonds) {
+      this.state.files?.elastic_bonds.set({ opacity: value / 100 })
+    }
+    */
+  };
+
+  onVirtualLinksVisibilityChange = (_: any, checked: boolean) => {
+    const files = this.state.files;
+
+    if (!files) return;
+
+    if (files.goOrElastic) {
+      files.goOrElastic.representation.visible = checked;
+    } else if (files.elastic_bonds) {
+      files.elastic_bonds.visible = checked;
+    }
+
+    this.setState({ virtual_link_visible: checked });
+  };
+
+  onBeadRadiusChange = (_: any, value: number | number[]) => {
+    if (Array.isArray(value)) {
+      value = value[0];
+    }
+
+    this.setState({ bead_radius_factor: value });
+
+    this.setCoarseGrainRepresentation(
+      {
+        radiusType: "data",
+        radiusData:
+          this.state.coarse_grain_ngl!.martiniSchemes.applyRadiusFactor(
+            this.state.builder_force_field,
+            value,
+          ),
+      },
+      ["ball+stick"],
+    );
+  };
+
+  onHistoryDownload = async () => {
+    if (!this.state.files!.goOrElastic) {
+      return false;
+    }
+
+    try {
+      const name =
+        this.state.all_atom_pdb!.name.slice(
+          0,
+          this.state.all_atom_pdb!.name.indexOf(".pdb"),
+        ) + "_modification_history.txt";
+      let content = [];
+      content.push(this.state.files!.goOrElastic.customBondsGet().join("\n"));
+      let history_file = new File(content, name);
+      downloadBlob(history_file, name);
+    } catch (error) {
+      console.warn("Failed to download history", error);
+    }
+  };
+
+  onMoleculeDownload = async (edited: boolean = false) => {
+    //console.warn("onMoleculeDownload");
+
+    if (!this.state.files) {
+      console.warn(
+        "Hey, files should be present in component when this method is called.",
+      );
+      return;
+    }
+
+    this.setState({ generating_files: true });
+
+    if (edited) {
+      await this.applyBondsToFiles();
+    }
+
+    try {
+      await this.downloadMolecule();
+    } catch (e) {
+      console.warn("Failed to build zip.", e);
+    } finally {
+      this.setState({ generating_files: false });
+    }
+  };
+
+  onRepresentationAdd = (type: ViableRepresentation) => {
+    const cmp_aa = this.state.all_atom_ngl!;
+    const cmp_coarse = this.state.coarse_grain_ngl!;
+
+    cmp_aa.add(type, {
+      visible: this.state.all_atom_visible,
+      opacity: this.state.all_atom_opacity,
+    });
+
+    cmp_coarse.add(
+      type,
+      {
+        visible: this.state.coarse_grain_visible,
+        opacity: this.state.coarse_grain_opacity,
+      },
+      {
+        radius: true,
+        color: true,
+        beads: this.beads,
+        ff: this.state.builder_force_field,
+        radiusFactor: type === "surface" ? 1 : this.state.bead_radius_factor,
+      },
+    );
+
+    this.setState({
+      representations: [...this.state.representations, type],
+    });
+  };
+
+  onRepresentationRemove = (type: ViableRepresentation) => {
+    const cmp_aa = this.state.all_atom_ngl!;
+    const cmp_coarse = this.state.coarse_grain_ngl!;
+
+    cmp_aa.removeOfType(type);
+    cmp_coarse.removeOfType(type);
+
+    this.setState({
+      representations: this.state.representations.filter((e) => e !== type),
+    });
+  };
+
+  onRepresentationChange = (_: any, values: ViableRepresentation[]) => {
+    const actual = this.state.representations;
+
+    for (const value of values) {
+      if (!actual.find((e) => e === value)) {
+        // new value !
+        this.onRepresentationAdd(value);
+      }
+    }
+
+    for (const val of actual) {
+      if (!values.find((e) => e === val)) {
+        // value deleted !
+        this.onRepresentationRemove(val);
+      }
+    }
+  };
+
+  onThemeChange = () => {
+    const is_dark = this.state.theme.palette.type === "dark";
+
+    this.changeTheme(is_dark ? "light" : "dark");
+  };
+
+  onWantReset = () => {
+    this.setState({
+      want_reset: true,
+    });
+  };
+
+  onWantResetCancel = () => {
+    this.setState({ want_reset: false });
+  };
+
+  onWantGoBack = (e: React.MouseEvent) => {
+    // Don't go to #!
+    //console.log("Dont go !");
+    e.preventDefault();
+
+    this.setState({
+      want_go_back: true,
+    });
+  };
+
+  onWantGoBackCancel = () => {
+    this.setState({ want_go_back: false });
+  };
+
+  onGoBack = () => {
+    if (this.state.want_go_tutorial) this.go_tuto_anchor.current.click();
+    else
+      // Click on the hidden link
+      this.go_back_btn.current.click();
+  };
+
+  onForceFieldChange = (ff: AvailableForceFields) => {
+    if (this.state.builder_mode === "go" && !ff.includes("martini3")) {
+      this.setState({ builder_mode: "classic" });
+    }
+    this.setState({ builder_force_field: ff });
+  };
+
+  /**
+   Hoist the call to addOrRemoveGoBond, passed atom index are Virtual particule 1-based index
+  */
+  // TO FIX
+  onBondCreate = (
+    go_atom_1: number,
+    go_atom_2: number,
+    chain1: number | string,
+    chain2: number | string,
+  ) => {
+    /*
+    console.log(
+      `[Builder:onBondCreate] receiveing ${chain1},${chain2} ${go_atom_1}, ${go_atom_2}`,
+    );
+    */
+
+    return this.addOrRemoveVBond({
+      mode: "add",
+      target: [go_atom_1, go_atom_2],
+      chain: [chain1, chain2],
+    });
+  };
+
+  /**
+   Hoist the call to addOrRemoveGoBond, passed atom index are Virtual particule 1-based index
+  */
+  // TO FIX
+  onBondRemove = (
+    chain_1: number | string,
+    real_atom_1: number,
+    chain_2: number | string,
+    real_atom_2: number,
+  ) => {
+    return this.addOrRemoveVBond({
+      mode: "remove",
+      target: [real_atom_1, real_atom_2],
+      chain: [chain_1, chain_2],
+    });
+  };
+
+  // TO FIX
+  onAllBondRemove = (chain: number | string, from_go_atom: number) => {
+    return this.addOrRemoveVBond({
+      mode: "remove",
+      target_single: from_go_atom,
+      chain_single: chain,
+    });
+  };
+
+  // target_ensembl needs fix to carry chainid
+  // TO FIX
+  onBondCreateFromSet = (set1: Set<string>, set2?: Set<string>) => {
+    this.addOrRemoveVBond({
+      mode: "add",
+      target_ensembl: [set1, set2],
+      //chain
+    });
+  };
+
+  // DONE
+  onBondRemoveFromSet = (
+    set1: Set<string>,
+    currBonds: [BondMember, BondMember, string][],
+    set2?: Set<string>,
+  ) => {
+    //console.log(`[Builder:onBondRemoveFromSet]`);
+    this.addOrRemoveVBond({
+      mode: "remove",
+      targetBondEnsembl: currBonds,
+    });
+  };
+  //
+  onGoEditorValidate = async (restore: boolean = true) => {
+    /*console.log(
+      `[Builder:onGoEditorValidate] firing with restore = ${restore}`,
+    );
+    */
+
+    //console.log(`[Builder:onGoEditorValidate] starting to apply bond to file`);
+    if (!this.state.files) {
+      console.error("files are not registered in state, should not happen");
+      return;
+    }
+
+    if (!this.jobId) {
+      console.error("job id is not registered, should not happen");
+      return;
+    }
+
+    try {
+      //console.warn("[Builder:onGoEditorValidate] await applyBondsToFiles()");
+      await this.applyBondsToFiles();
+      /*
+      console.warn(
+        "[Builder:onGoEditorValidate] await applyBondsToFiles() Completed",
+      );
+      console.warn("[Builder:onGoEditorValidate] exit/Resolve<null>");
+       */
+      if (restore) this.restoreSettingsAfterGo(false);
+    } catch (e) {
+      toast("Can't apply new bonds to itp files", "error");
+      // console.error(e);
+    }
+  };
+
+  validateFirstStep = async () => {
+    if (!this.state.files) {
+      console.error("files are not registered in state, should not happen");
+      return;
+    }
+
+    if (!this.jobId) {
+      console.error("job id is not registered, should not happen");
+      return;
+    }
+
+    try {
+      await this.applyBondsToFiles();
+    } catch (e) {
+      toast("Can't apply new bonds to itp files", "error");
+      // console.error(e);
+    }
+  };
+
+  onValidateComment = async (new_project: boolean, comment: string) => {
+    //this.restoreSettingsAfterGo(false);
+    this.validateFirstStep();
+
+    await this.applyBondsToFiles();
+
+    ApiHelper.request("history/update", {
+      method: "POST",
+      parameters: {
+        jobId: this.jobId,
+        files: this.state.files?.itps.map((itp) => itp.content),
+        molIdxs: this.state.files?.itps.map((itp) => itp.mol_idx),
+        editionComment: comment,
+        newProject: new_project,
+      },
+      body_mode: "multipart",
+    })
+      .then(() => {
+        toast(`Job has been saved in history`, "success");
+      })
+      .catch((e) => {
+        toast(`Job can't be saved in history, an error occured`, "error");
+        //console.error(e);
+      });
+  };
+
+  onGoEditorCancel = async () => {
+    this.restoreSettingsAfterGo(true);
+  };
+
+  onGoEditorStart = () => {
+    //console.warn("onGoEditorStart state");
+    //console.warn(this.state);
+    // Save original params
+    this.saved_viz_params = {
+      aa_enabled: this.state.all_atom_visible,
+      cg_enabled: this.state.coarse_grain_visible,
+      vl_enabled: this.state.virtual_link_visible,
+      cg_op: this.state.coarse_grain_opacity,
+      vl_op: this.state.virtual_link_opacity,
+      representations: this.state.representations,
+      // @ts-ignore
+      goOrElastic: this.state.files!.goOrElastic!.clone(),
+    };
+
+    //console.log("saved vized params go", this.saved_viz_params.go)
+
+    // Apply custom params
+    this.onRepresentationChange(undefined, ["ball+stick"]);
+
+    for (const repr of this.state.coarse_grain_ngl!.representations) {
+      repr.visible = true;
+    }
+    for (const repr of this.state.all_atom_ngl!.representations) {
+      repr.visible = false;
+    }
+
+    const vrepr = this.state.files!.goOrElastic!.representation;
+    vrepr.visible = true;
+    vrepr.set({ opacity: 1 });
+
+    this.setCoarseGrainRepresentation({ opacity: 0.7 });
+
+    // Load the go editor
+    this.setState(
+      { running: "go_editor", virtual_link_opacity: 1 } /* , () =>
+      console.log(`RNG:${this.state.running}`),*/,
+    );
+  };
+
+  onGoHistoryBack = (opacity?: number) => {
+    const goOrElastic = this.state.files?.goOrElastic;
+
+    if (!goOrElastic) return;
+
+    goOrElastic.historyBack();
+    goOrElastic.render(opacity ?? this.state.virtual_link_opacity);
+    this.setState({ edited: true });
+  };
+
+  onGoHistoryRevert = (opacity?: number) => {
+    const goOrElastic = this.state.files?.goOrElastic;
+
+    if (!goOrElastic) return;
+
+    goOrElastic.historyRevert();
+    goOrElastic.render(opacity ?? this.state.virtual_link_opacity);
+    this.setState({ edited: true });
+  };
+
+  applyBondsToFiles = async () => {
+    if (!this.state.files) {
+      //console.warn("Files should be loaded into component to apply bonds");
+      return;
+    }
+    /*
+    console.log(
+      `[Builder: async applyBondsToFiles] starting w/ files`,
+      this.state.files,
+    );
+     */
+    const files = this.state.files;
+    const itps = [...files.itps];
+
+    if (files.goOrElastic) {
+      // We only need to alter "go_nbparams.itp"
+      //console.log(`[Builder:applyBondsToFiles] go or elastic`);
+      const to_replace = await files.goOrElastic.toOriginalFiles();
+
+      for (const mol_file of to_replace!) {
+        const index = itps.findIndex((e) => e.name === mol_file.file.name);
+        const m_file: MartinizeFile = {
+          name: mol_file.file.name,
+          content: mol_file.file,
+          type: "chemical/x-include-topology",
+          mol_idx: mol_file.mol_idx,
+        };
+
+        if (index !== -1) {
+          itps[index] = m_file;
+        } else {
+          itps.push(m_file);
+        }
+
+        this.setState({
+          files: {
+            top: this.state.files.top,
+            pdb: this.state.files.pdb,
+            radius: this.state.files.radius,
+            gro: this.state.files.gro,
+            elastic_bonds: this.state.files.elastic_bonds,
+            itps,
+            goOrElastic: this.state.files.goOrElastic,
+            warnings: this.state.files.warnings,
+          },
+        });
+      }
+    }
+  };
+
+  downloadMolecule = async () => {
+    if (!this.state.files) {
+      //console.warn("files should be loaded into component to download them.");
+      return;
+    }
+
+    //console.warn("downloadMolecule");
+    //console.dir(this.state.files);
+    const zip = new JSZip();
+    const files = this.state.files;
+    zip.file(files.pdb.name, files.pdb.content);
+    zip.file(files.top.name, files.top.content);
+    if (files.gro) zip.file(files.gro.name, files.gro.content);
+    for (const itp of files.itps) {
+      zip.file(itp.name, itp.content);
+    }
+
+    const generated = await zip.generateAsync({
+      type: "blob",
+      compression: "DEFLATE",
+      compressionOptions: {
+        level: 7,
+      },
+    });
+
+    downloadBlob(generated, this.state.results_prefix + "-CG.zip");
+  };
+
+  /* RENDERING */
+
+  allAtomLoading() {
+    return (
+      <div>
+        <Marger size="2rem" />
+
+        <Typography>Reading PDB file...</Typography>
+
+        <Marger size=".5rem" />
+
+        <Typography variant="body2" color="textSecondary">
+          This should be fast.
+        </Typography>
+      </div>
+    );
+  }
+
+  martinizeGenerating() {
+    return (
+      <div style={{ textAlign: "center" }}>
+        <Marger size="2rem" />
+
+        <CircularProgress size={56} />
+        <Marger size="1rem" />
+
+        <Typography variant="h6">
+          Generating coarse grained structure...
+        </Typography>
+        <Marger size=".5rem" />
+        <Typography>{this.state.martinize_step}</Typography>
+        <Marger size="1rem" />
+
+        <Typography color="textSecondary">This might take a while.</Typography>
+      </div>
+    );
+  }
+
+  renderModalBackToDatabase() {
+    return (
+      <Dialog
+        open={!!this.state.want_go_back}
+        onClose={this.onWantGoBackCancel}
+      >
+        <DialogTitle>
+          Get back to {this.state.want_go_tutorial ? "tutorial" : "database"} ?
+        </DialogTitle>
+
+        <DialogContent>
+          <DialogContentText>
+            You will definitively lose unsaved changes made into Molecule
+            Builder.
+          </DialogContentText>
+        </DialogContent>
+
+        <DialogActions>
+          <Button color="primary" onClick={this.onWantGoBackCancel}>
+            Cancel
+          </Button>
+          <Button color="secondary" onClick={this.onGoBack}>
+            Go back
+          </Button>
+        </DialogActions>
+      </Dialog>
+    );
+  }
+
+  getMartinizeVersion() {
+    ApiHelper.request("molecule/martinize/version")
+      .then((request_res) => {
+        this.setState({ version: request_res.version });
+      })
+      .catch((err) => {
+        console.error(err);
+      });
+  }
+
+  changeCommandline(value: string) {
+    if (this.state.advanced === "true") {
+      this.setState({ commandline: value }, () => {});
+    } else {
+      const s = this.state;
+      //const socket = SocketIo.connect(SERVER_ROOT);
+      const form_data: any = {};
+
+      form_data.ff = s.builder_force_field;
+      form_data.position = s.builder_positions;
+      form_data.cter = s.cTer;
+      form_data.nter = s.nTer;
+      form_data.sc_fix = s.sc_fix;
+      form_data.cystein_bridge = s.cystein_bridge;
+
+      if (s.builder_mode === "elastic") {
+        form_data.elastic = "true";
+        form_data.ef = s.builder_ef;
+        form_data.el = s.builder_el;
+        form_data.eu = s.builder_eu;
+        form_data.ea = s.builder_ea;
+        form_data.ep = s.builder_ep;
+        form_data.em = s.builder_em;
+        form_data.water_bias = s.builder_water_bias;
+      } else if (s.builder_mode === "go") {
+        form_data.use_go = "true";
+        form_data.sc_fix = "true";
+        form_data.water_bias = s.builder_water_bias;
+      }
+    }
+  }
+
+  render() {
+    const classes = this.props.classes;
+    const is_dark = this.state.theme.palette.type === "dark";
+
+    if (Settings.logged === LoginStatus.None) {
+      return (
+        <EmbeddedError
+          title="Forbidden"
+          text="You can't access the Molecule Builder page without account."
+        />
+      );
+    }
+
+    return (
+      <ThemeProvider theme={this.state.theme}>
+        {this.renderModalBackToDatabase()}
+        {/*<BetaWarning/>*/}
+
+        <Grid
+          container
+          component="main"
+          className={classes.root}
+          ref={this.root}
+          style={{
+            backgroundColor: this.state.theme.palette.background.default,
+          }}
+        >
+          <Grid
+            item
+            sm={8}
+            md={4}
+            component={Paper}
+            elevation={6}
+            className={classes.side}
+            style={{ backgroundColor: is_dark ? "#232323" : "" }}
+            square
+          >
+            <div className={classes.paper}>
+              <div className={classes.header}>
+                <Typography
+                  component="h1"
+                  variant="h3"
+                  align="center"
+                  style={{
+                    fontWeight: 700,
+                    fontSize: "2.5rem",
+                    marginBottom: "0rem",
+                  }}
+                >
+                  Build a molecule with martinize
+                </Typography>
+                <Typography
+                  variant="subtitle1"
+                  align="center"
+                  style={{
+                    fontSize: "0.7rem",
+                    fontStyle: "italic",
+                    marginBottom: "1rem",
+                  }}
+                >
+                  martinize version : {this.state.version}
+                </Typography>
+                {/* modify this
+                https://mui.com/material-ui/react-grid/
+                 */}
+
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "nowrap",
+                    justifyContent: "space-around",
+                  }}
+                >
+                  <div style={{ textAlign: "center", marginBottom: "1rem" }}>
+                    <Link
+                      href="#!"
+                      // When state is initial state (main loader), don't show the confirm modal
+                      onClick={(e) => {
+                        this.setState({ want_go_tutorial: false });
+                        this.state.running !== "pdb"
+                          ? this.onWantGoBack(e)
+                          : this.onGoBack();
+                      }}
+                    >
+                      <FaIcon home style={{ fontSize: "1.5rem" }} />
+                      <span style={{ marginLeft: ".7rem", fontSize: "1.1rem" }}>
+                        MAD Home
+                      </span>
+                    </Link>
+                    <RouterLink
+                      ref={this.go_back_btn}
+                      to="/"
+                      style={{ display: "none" }}
+                    />
+                  </div>
+
+                  <div style={{ textAlign: "center", marginBottom: "1rem" }}>
+                    <a
+                      href="/tutorial/molecule.html"
+                      ref={this.go_tuto_anchor}
+                      style={{ display: "none" }}
+                    ></a>
+                    <a
+                      className="static"
+                      // When state is initial state (main loader), don't show the confirm modal
+                      onClick={(e) => {
+                        if (this.state.running !== "pdb") {
+                          //console.log("Shwoing stuff");
+                          this.setState({ want_go_tutorial: true });
+                          this.onWantGoBack(e);
+                        }
+                        this.onGoBack();
+                      }}
+                    >
+                      <FaIcon graduation-cap style={{ fontSize: "1.5rem" }} />
+                      <span style={{ marginLeft: ".7rem", fontSize: "1.1rem" }}>
+                        Builder Tutorial
+                      </span>
+                    </a>
+                  </div>
+                  <div />
+                </div>
+                <Divider />
+              </div>
+
+              {this.state.running === "load_history" && (
+                <div>
+                  <Marger size="2rem" />
+                  <CircularProgress size={56} />
+                </div>
+              )}
+
+              {/* Forms... */}
+              {this.state.running === "pdb" && (
+                <LoadPdb
+                  onFileSelect={this.onFileSelect}
+                  error={this.state.error}
+                />
+              )}
+
+              {this.state.running === "pdb_read" && this.allAtomLoading()}
+
+              {(this.state.running === "martinize_params" ||
+                this.state.running === "martinize_error") && (
+                <MartinizeForm
+                  nglAllAtomAminoAcidsView={
+                    this.state.all_atom_ngl?.representations[0].aminoAcidView
+                  }
+                  martinizeError={this.state.martinize_error}
+                  onBuilderModeChange={(value) =>
+                    this.setState({ builder_mode: value as any }, () => {
+                      this.changeCommandline(value);
+                    })
+                  }
+                  onBuilderPositionChange={(value) =>
+                    this.setState({ builder_positions: value as any }, () => {
+                      this.changeCommandline(value);
+                    })
+                  }
+                  onForceFieldChange={(value: AvailableForceFields) =>
+                    this.setState({ builder_force_field: value }, () => {
+                      this.changeCommandline(value);
+                    })
+                  }
+                  onMartinizeBegin={this.handleMartinizeBegin}
+                  onReset={() => this.reset()}
+                  onElasticChange={(type, value) => {
+                    // @ts-ignore
+                    this.setState({ [type]: value }, () => {
+                      this.changeCommandline(value);
+                    });
+                  }}
+                  onWaterBiasChange={(i: number, v: number) => {
+                    let _: [number, number, number] = [
+                      ...this.state.builder_water_bias,
+                    ];
+                    _[i] = v;
+                    this.setState({ builder_water_bias: _ });
+                  }}
+                  onAdvancedChange={(value) => {
+                    this.changeCommandline(value);
+                  }}
+                  onIdpSetting={(idpField) => this.setState({ idpField })}
+                  builderForceField={this.state.builder_force_field}
+                  builderMode={this.state.builder_mode}
+                  builderPosition={this.state.builder_positions}
+                  builderEa={this.state.builder_ea}
+                  builderEf={this.state.builder_ef}
+                  builderEl={this.state.builder_el}
+                  builderEm={this.state.builder_em}
+                  builderEp={this.state.builder_ep}
+                  builderEu={this.state.builder_eu}
+                  builderwaterBias={this.state.builder_water_bias}
+                  cTer={this.state.cTer}
+                  nTer={this.state.nTer}
+                  sc_fix={this.state.sc_fix}
+                  cystein_bridge={this.state.cystein_bridge}
+                  advanced={this.state.advanced}
+                  commandline={this.state.commandline}
+                  advancedActivate={() => {
+                    if (this.state.advanced === "true") {
+                      this.setState({ advanced: "false" }, () =>
+                        this.changeCommandline(""),
+                      );
+                    } else {
+                      this.setState({ advanced: "true" });
+                    }
+                  }}
+                  doSendMail={(bool) =>
+                    this.setState({ send_mail: bool.toString() })
+                  }
+                  polymerNumber={this.state.polymer_number}
+                  chainList={this.state.chain_list}
+                />
+              )}
+
+              {this.state.running === "martinize_generate" &&
+                this.martinizeGenerating()}
+
+              {this.state.running === "done" && (
+                <MartinizeGenerated
+                  martinizeWarnings={this.state.files?.warnings}
+                  onReset={() => this.reset()}
+                  theme={this.state.theme}
+                  allAtomName={
+                    this.state.all_atom_pdb
+                      ? this.state.all_atom_pdb!.name.split(".")[0]
+                      : "NOTHING"
+                  }
+                  onThemeChange={this.onThemeChange}
+                  virtualLinks={
+                    this.state.builder_mode === "classic"
+                      ? ""
+                      : this.state.builder_mode
+                  }
+                  allAtomOpacity={this.state.all_atom_opacity}
+                  allAtomVisible={this.state.all_atom_visible}
+                  onAllAtomOpacityChange={this.onAllAtomOpacityChange}
+                  onAllAtomVisibilityChange={this.onAllAtomVisibilityChange}
+                  onMoleculeDownload={this.onMoleculeDownload}
+                  //onSave={name => this.save(name)}
+                  onRepresentationChange={this.onRepresentationChange}
+                  representations={this.state.representations}
+                  coarseGrainedOpacity={this.state.coarse_grain_opacity}
+                  coarseGrainedVisible={this.state.coarse_grain_visible}
+                  onCoarseGrainedOpacityChange={
+                    this.onCoarseGrainedOpacityChange
+                  }
+                  onCoarseGrainedVisibilityChange={
+                    this.onCoarseGrainedVisibilityChange
+                  }
+                  virtualLinksOpacity={this.state.virtual_link_opacity}
+                  virtualLinksVisible={this.state.virtual_link_visible}
+                  onVirtualLinksOpacityChange={this.onVirtualLinksOpacityChange}
+                  onVirtualLinksVisibilityChange={
+                    this.onVirtualLinksVisibilityChange
+                  }
+                  saved={this.state.saved}
+                  edited={this.state.edited}
+                  generatingFiles={this.state.generating_files}
+                  onGoEditorStart={this.onGoEditorStart}
+                  beadRadiusFactor={this.state.bead_radius_factor}
+                  onBeadRadiusChange={this.onBeadRadiusChange}
+                  goSiteVisible={this.state.go_sites_visible}
+                  onGoSiteVisibilityChange={this.onGoSiteVisibilityChange}
+                />
+              )}
+
+              {this.state.running === "go_editor" && (
+                <GoEditor
+                  stage={this.ngl}
+                  cgCmp={this.state.coarse_grain_ngl!}
+                  onBondRemove={this.onBondRemove}
+                  onBondCreate={this.onBondCreate}
+                  onAllBondRemove={this.onAllBondRemove}
+                  doValidate={this.onGoEditorValidate}
+                  onCancel={this.onGoEditorCancel}
+                  onRedrawGoBonds={this.redrawVBonds}
+                  setColorForCgRepr={this.setSchemeIdColorForCg}
+                  onBondCreateFromSet={this.onBondCreateFromSet}
+                  onBondRemoveFromSet={this.onBondRemoveFromSet}
+                  onGoHistoryBack={this.onGoHistoryBack}
+                  onGoHistoryRevert={this.onGoHistoryRevert}
+                  goInstance={this.state.files!.goOrElastic!}
+                  mode={this.state.builder_mode}
+                  onHistoryDownload={this.onHistoryDownload}
+                  beadRadiusFactor={this.state.bead_radius_factor}
+                  onBeadRadiusChange={this.onBeadRadiusChange}
+                  onValidateComment={(new_project, comment) =>
+                    this.onValidateComment(new_project, comment)
+                  }
+                  onDownload={() => this.onMoleculeDownload(true)}
+                />
+              )}
+            </div>
+          </Grid>
+
+          <Grid item sm={4} md={8}>
+            {this.state.running === "load_error" && (
+              <Alert severity="error">{this.state.load_error_message}</Alert>
+            )}
+            <div id="ngl-stage" style={{ height: "calc(100% - 5px)" }} />
+            {this.state.running === "done" && (
+              <BeadsLegend ff={this.state.builder_force_field} />
+            )}
+          </Grid>
+        </Grid>
+      </ThemeProvider>
+    );
+  }
+}
+
+export default withStyles((theme) => ({
+  root: {
+    height: "100vh",
+  },
+  paper: {
+    margin: theme.spacing(8, 4),
+    marginTop: 0,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+  },
+  header: {
+    marginTop: "2rem",
+    width: "100%",
+  },
+  form: {
+    width: "100%", // Fix IE 11 issue.
+    marginTop: theme.spacing(1),
+  },
+  submit: {
+    margin: theme.spacing(3, 0, 2),
+  },
+  side: {
+    zIndex: 3,
+    overflow: "auto",
+    maxHeight: "100vh",
+  },
+}))(withTheme(MartinizeBuilder));
+
+// Used for martinize output in ajax post call
+/*function martinizeOutputParser(input: string) : {
+  pdb: MartinizeFile,
+  top: MartinizeFile,
+  itps: MartinizeFile[],
+  radius: { [name: string]: number },
+  go_bonds?: ElasticOrGoBounds[],
+  elastic_bonds?: ElasticOrGoBounds[]
+} {
+  return JSON.parse(
+    input,
+    function (key, value) {
+      if (key === 'content' && typeof value === 'string') {
+        // this refers to object in reviver that contains the {key} property
+        // We can create a File object (that extends Blob)
+        if ('type' in this && 'name' in this) {
+          return new File([value], this.name, { type: this.type });
+        }
+
+        // Convert to blob
+        return new Blob([value]);
+      }
+
+      return value;
+    }
+  );
+}*/
+
+// @ts-ignore
+window.Buffer = Buffer;

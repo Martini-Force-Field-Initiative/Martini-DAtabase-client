@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <!-- Compiled and minified CSS -->
+    <link rel="stylesheet" href="/assets/materialize.min.css">
+    <link rel="stylesheet" href="index.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="all.css" rel="stylesheet">
+    <!-- Compiled and minified JavaScript -->
+    <script src="/assets/materialize.min.js" type="text/javascript"></script>
+</head>
+<div class="navbar-fixed">
+    <nav>
+        <div class="nav-wrapper">
+
+            <ul id="nav-mobile" class="left hide-on-med-and-down">
+                <li> <a style="display:flex; gap:1em" href="/"> <i class="small material-icons inline-icon"> arrow_back
+                        </i>
+                        <span> Go back to MAD server </span> </a></li>
+                <li> <a href="/tutorial">
+                        <div><i class="medium material-icons inline-icon">house</i></div>
+                    </a> </li>
+                <li><a href="database.html">Database</a></li>
+                <li><a href="molecule.html">Molecule Builder</a></li>
+                <li><a href="system.html">System Builder</a></li>
+                <li class="active"><a href="polymer.html">Polymer Editor</a></li>
+                <li><a href="api.html">API</a></li>
+                <li><a href="architecture.html">Architecture</a></li>
+            </ul>
+        </div>
+    </nav>
+</div>
+
+<div class="container">
+    <h1>Polymer Editor</h1>
+    <div id="header">
+        We are excited to deliver this new feature as an easy way to generate new polymer (such 
+        as peptides or polysaccharides) or to modify existing molecules (such protein post-translational 
+        modifications like for PEGylation or glycosylation). 
+        The  <span class="MAD_logo">MAD:Polylmer Builder</span> allows any registred user 
+        to design coarsegrained polymer in a user-friendly way,
+        with no need for any command line or computing skills. 
+        The <span class="MAD_logo">MAD:Polymer Builder</span> is powered by the <a
+            href="https://github.com/marrink-lab/polyply_1.0">
+            Polyply</a>[<a href="#references">1</a>] program to generate the
+        necessary files and coordinates for molecular dynamic simulations. 
+        Users can generate a molecule using some of the molecular compounds provided by Polyply 
+        by using the Martini3 forcefield or the Martini 2 forcefield, or by processsing
+        your molecule definitions (from the MAD database, MAD history, or upload file directly).
+    </div>
+
+    <div id="summary">
+        <p>
+            The following examples will guide you through the multiple uses 
+            of <span class="MAD_logo">MAD: Polymer Editor</span>.
+        </p>
+        <h6> <a href="#organization">1. How does <span class="MAD_logo">MAD: Polymer Editor</span> work? </a></h6>
+        <h6> <a href="#simple_peptide"> 2. Create a simple peptide </a> </h6>
+        <h6> <a href="#isopeptidique_link"> 3. Create an isopeptide link </a> </h6>
+        <h6> <a href="#load">4. Load a molecule</a> </h6>
+        <h6> <a href="#pegylation"> 5. Pegylate a protein </a> </h6>
+        <h6> <a href="#limitation">6. Limitations </a></h6>
+    </div>
+
+    <div class="disclaimer" style="width: 75%;margin-bottom: 2em">
+        <div><i class="medium material-icons inline-icon">person_add</i></div>
+        <div>
+            Because the service makes use of our computational resources, it is required for you to <a
+                href="/login">sign
+                in</a> order to have access to the <span class="MAD_logo">MAD:Polymer Editor</span>
+        </div>
+    </div>
+
+
+    <div id="organization">
+        <h4>General organization
+        </h4>
+
+
+        <div>
+            The <span class="MAD_logo">MAD: Polymer Editor</span> interface is divided 
+            into two sections: 
+            An interactive graphical viewer and a detailed left-end menu.
+            The graphical viewer features mouse drag and click interactions to select, 
+            remove or assemble elements of the polymer.
+            The left-end menu supports various operations to create and modify both 
+            the molecular components and their bonds.
+            Once, your polymer is sketched, <span class="MAD_logo">MAD: Polymer Editor</span> 
+            will process it. If there are any issues with the process, you may be prompted for 
+            eventual additional informtions. Once the coordinates are generated, a small minimization
+            is run with <a href="https://www.gromacs.org/about.html">gromacs </a> to ensure the reliability
+            of the molecule, which is then displayed in the <span class="MAD_logo">MAD: Polymer Editor</span>
+            &nbsp; interface. Where, the generated files can be downloaded and added to your
+            history for future use inside MAD ecosystem.
+        </div>
+    </div>
+    <br>
+
+    <div id="simple_peptide">
+        <h4>Create a simple peptide</h4>
+        <div class="flex-container">
+            <div class="comment">
+
+                <div>
+                    In this section, we are going to generate a small peptide of 5 amino acids composed of 3 GLU and 2 ASP for the martini3
+                    forcefield.
+                </div>
+
+                <div class="main_comment">
+                    <ul class="show">
+                        <li>
+                            <span class="li_supt">Add a tripeptide:</span> Select the forcefield martini3 and
+                            then choose the right amino acid (here we choose
+                            Glutamic acid) and select its the number of copy, in the present case we choose 3
+                            repetitions.
+                            Than click on the right-end button to add a chain of 3 Glutamic acids to the graphical view.
+                        </li>
+                        <li>
+                            <span class="li_supt">Add another peptide and link it to the previous</span> Select arginine as a type and 2 as a number of copy. Then add to the graphical view.
+                        </li>
+                        <li>
+                            <span class="li_supt">Link them: </span>You may drag the two chains in close proximity to link them. 
+                            Alternatively you may click right on the graphical view and use the "magic link" option.
+                        </li>
+
+                        <li>
+                            <span class="li_supt">Process you polymer blueprint and generate CG files:</span> 
+                            By clicking on the <bold>NEXT</bold> button in the bottom central console, you will be prompted 
+                            for various processing options: change the size of the box for coordinate generation, 
+                            modify the number of molecules to position in this box and lastly choose a name for your molecule.
+                        </li>
+                        <li>
+                            <span class="li_supt">Done:</span> You can download your molecule and save it in your
+                            history.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div>
+
+                <!-- <img src="images/polymer/peptide.gif" style="width: 700px;" /> -->
+                <video width="640" height="0" autoplay loop muted>
+                    <source src="images/polymer/mad_tutorial_video_1.mp4" type="video/mp4" />            
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+        </div>
+        <div class="info">
+            <i class="material-icons inline-icon">info_outline</i>
+            Be sure that you have linked residue with a continuous id number ( do not do : (1-2-3)-(7-8)-(4-5-6) do
+            (1-2-3)-(4-5-6)-(7-8) instead). It may generate an error with polyply if the continuity is not respected.
+        </div>
+
+    </div>
+
+    <br>
+
+
+    <div id="load">
+        <h4>How to load a molecule</h4>
+
+        <div> The <span class="MAD_logo">MAD:Polymer Editor</span> can start working on preexisting molecular coordinates
+        </div>
+
+        <!--
+        <div class="flex-container">
+            <div class="comment">
+                <div class="main_comment">
+                    <ul>
+                        <li>
+                            <span class="li_supt">Upload a molecule representation without coordinates (red rectangle):</span> You can load several type of files
+                            in <span class="MAD_logo">MAD:Polymer Editor</span>. Here are the different types of files you can upload (in these cases,
+                            you don't have any information about the coordinate).
+
+
+                            <ul style="padding-left: 5%;">
+                                <li><span class="li_supt">JSON file</span>, who contains a molecule description that you
+                                    have
+                                    previoulsy download in JSON format or that you have allready created with polyply
+                                    "gen-itp".This JSON should contain a list of nodes (molecules) and links between
+                                    them. Exemple <a href="/public/tutorial/files/exemple.json"> here</a>.
+                                </li>
+                                <li>
+                                    <span class="li_supt">Fasta file</span>: A protein sequence in Fasta format who
+                                    respect the one letter <a href="https://www.bioinformatics.org/sms/iupac.html">
+                                        code</a>.
+                                </li>
+                                <li>
+                                    <span class="li_supt">ITP file</span>: A topology file for a molecule that is not
+                                    already inside polyply database, in this case, be sure that your molecule is right
+                                    coarse-grained in martihighlighni3. If your molecule is composed of molecules available in
+                                    polyply database, it will be converted in several molecules with link. For example,
+                                    if you
+                                    load a protein, amino acids will be represented.
+                                </li>
+                            </ul>
+                        </li>
+                        <li>
+                            <span class="li_supt">Modify a molecule with coordinate (blue rectangle):</span>
+
+                            <ul style="padding-left: 5%;">
+                                <li>
+                                    <span class="li_supt">Load from your computer</span>
+                                    To load your molecule and add/substitute polymer you need to provide 2 different
+                                    files :
+                                    coordinates (format .gro) and the topology (format .itp).
+                                </li>
+                                <li>
+                                    <span class="li_supt">Load from database or history (Advanced function)</span> You
+                                    can load
+                                    a molecule from the database or your history. You will load topology and coordinate
+                                    file.
+                                </li>
+                                <li>
+                                    <span class="li_supt">Design your own itp link file (Avanced fonction)</span>
+                                    Because
+                                    polyply has a limited list of a molecule, you would want to create your linker file
+                                    to
+                                    have better control of the output result. You can see how to design this file <a
+                                        href="https://github.com/marrink-lab/polyply_1.0/wiki/Tutorial:-writing-.ff-input-files">here</a>.
+                                </li>
+                            </ul>
+
+                        </li>
+
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div>
+                <img src="images/polymer/starting_upload.png" style="min-width:300px;" />
+            </div>
+        </div>
+    </div>
+
+    -->
+    <div id="isopeptidique_link">
+        <h4>Create an isopeptidique link</h4>
+        <div class="flex-container">
+            <div class="comment">
+
+                <div>
+                    In this part, we want to create a link not handled by polyply. We want to do an isopeptide link
+                    between a peptide that contains only Lysine for instance and a peptide that contains Valine and
+                    Glutamic acid. In this case, we don't have to change the beads type.
+                </div>
+
+                <div class="main_comment">
+                    <ul class="show">
+                        <li>
+                            <span class="li_supt">Create 2 peptides:</span> As we have seen before, create 2 peptide
+                            chains. The first one will contain only Valine and the second one contains different amino
+                            acids
+                        </li>
+                        <li>
+                            <span class="li_supt">Link and send:</span> Now you can link it and send it to the server
+                            to computation.
+                        </li>
+                        <li>
+                            <span class="li_supt">Fix link:</span> A problem with be raised by polyply. The link between
+                            amino acid is not provided by the polyply database. So you should fix this link, you can
+                            define which bead you want to connect, change beads type, and other link parameters.
+                        </li>
+
+                    </ul>
+                </div>
+            </div>
+            <div>
+                <img src="images/polymer/isopeptidique_link.gif" style="width: 700px;" />
+            </div>
+        </div>
+
+
+    </div>
+
+
+
+
+    <br>
+    <div id="pegylation">
+        <h4>Pegylate a protein</h4>
+
+        <div>
+            In this part, we want to apply a post-translation modification: attaching polyethylene glycol (PEG or PEO)
+            molecules to a protein. This modification is called Pegylation and it helps improve the properties
+            of a protein :
+            <ul style="margin-left: 100px;">
+                <li style="margin-bottom: 3px;">
+                    Stability: Polyethylene glycol is a stable molecule that does not break down easily, so attaching it
+                    to a protein can help to stabilize the protein and extend its shelf life.
+                </li>
+                <li style="margin-bottom: 3px;">
+                    Solubility: This molecule is hydrophilic (water-loving), so attaching it to a protein can
+                    help to increase the protein's solubility in water. This can be especially useful for
+                    proteins that tend to aggregate or clump together, as the PEG can help to keep them in solution.
+                </li>
+                <li style="margin-bottom: 3px;">
+                    Lifetime: Polyethylene glycol can shield a protein from being recognized and broken down by the
+                    body's immune system, which can help to extend the protein's half-life in the body. This can be
+                    especially
+                    useful for proteins that are normally broken down quickly, as it allows them to remain
+                    active for a longer period.
+                </li>
+                <li style="margin-bottom: 3px;">Targeting: It can be attached to proteins in such a way that it can act
+                    as a "stealth" molecule, helping the protein to evade the body's immune system and targeting
+                    specific cells
+                    or tissues for delivery.
+                </li>
+            </ul>
+
+
+        </div>
+
+        <br>
+        <div class="flex-container">
+            <div class="comment">
+
+                <div class="main_comment">
+                    <ul class="show">
+                        <li>
+                            <span class="li_supt">Load your protein:</span> Load the file about your protein: we need
+                            the
+                            coordinates of the protein (format .gro) and the topology (format .itp). Section "Modify a
+                            protein" and upload your files.
+                        </li>
+                        <li>
+                            <span class="li_supt">Add polyethylene glycol:</span> Then add your polyethylene glycol
+                            (called PEO on the polyply molecule list residue). You can choose to link them directly on a
+                            certain type of
+                            residue (Alanine for instance), then you will add a chain of PEO of the desired length to
+                            every Alanine. You can also do it by hand: generate a chain and plug it into your protein
+                            "manually".
+                        </li>
+                        <li>
+                            <span class="li_supt">Send for computation :</span> Send to the server to do your
+                            modification. You will have a mistake because polyply doesn't know how to link a PEO and an
+                            amino acid. So click on the fixed link and select the beads that you want to connect (You
+                            can apply to every residue of the
+                            same type).
+                        </li>
+
+
+                        You can download the files used for the demo :
+                        <ul class="show">
+                            <li style="margin-bottom: 3px;">
+                                Topology <a href="https://raw.githubusercontent.com/MMSB-MOBI/martinize-db-client/polymad_merge2/public/tutorial/files/topology.itp">
+                                    file</a>
+                            </li>
+                            <li style="margin-bottom: 3px;">
+                                Coordinate <a href="https://raw.githubusercontent.com/MMSB-MOBI/martinize-db-client/polymad_merge2/public/tutorial/files/coordinate.gro">
+                                    file
+                                </a>
+                            </li>
+                        </ul>
+                </div>
+            </div>
+            <div>
+                <img src="images/polymer/peg.gif" style="width: 700px;" />
+            </div>
+        </div>
+    </div>
+    <br>
+
+
+
+    <br>
+
+    <div id="limitation">
+        <h4>Current limitations</h4>
+
+
+        <div>
+            There are still some limitations to this new MAD feature :
+            <ul style="margin-left: 50px;">
+                <li>
+                    <span class="li_supt">Impossible to generate structure:</span>, For now, generate big structure is
+                    not available. Because computational resources are limited and not allowed to generate a big
+                    system. For example, it's impossible to create a sphere of a cylinder.
+                </li>
+
+                <li>
+                    <span class="li_supt">Number of molecule limited:</span> Polyply has a limited number of
+                    molecule
+                    available. More molecules will be available in future updates. You can find all the molecules
+                    containing
+                    in polyply database for martini3 <a
+                        href=" https://github.com/marrink-lab/polyply_1.0/tree/master/polyply/data/martini3">
+                        here</a>.
+
+                </li>
+                <li>
+                    <span class="li_supt"> Links are limited:</span> For the moment all links between molecules are
+                    provided by polyply...
+                </li>
+
+                <li>
+                    <span class="li_supt">Chirality, blend of polymer</span>
+                </li>
+            </ul>
+
+        </div>
+    </div>
+
+
+    <div id="references">
+        <h4>References</h4>
+        <ol>
+            <li>
+                Grünewald, F., Alessandri, R., Kroon, P.C. et al. Polyply; a python suite for facilitating
+                simulations
+                of
+                macromolecules and nanomaterials. Nat Commun 13, 68 (2022).
+                https://doi.org/10.1038/s41467-021-27627-4
+            </li>
+        </ol>
+    </div>
+
+</div>
+
+</html>

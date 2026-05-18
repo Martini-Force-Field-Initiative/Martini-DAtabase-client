@@ -1,0 +1,130 @@
+import StickyNote2Icon from '@mui/icons-material/StickyNote2';
+import { Button,  Grid, Typography } from '@material-ui/core';
+import { styled } from '@mui/material/styles';
+import BuildCircleIcon from '@mui/icons-material/BuildCircle';
+import { Stack } from '@mui/material';
+import ShareIcon from '@mui/icons-material/Share';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+
+export const VisuallyHiddenInput = styled('input')({
+    clip: 'rect(0 0 0 0)',
+    clipPath: 'inset(50%)',
+    height: 1,
+    overflow: 'hidden',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    whiteSpace: 'nowrap',
+    width: 1,
+  });
+
+export interface CMUProps {
+    handleUpload:(f:FileList)=>void
+}
+const fileTooltip=`
+Aliquam eget finibus ante, non facilisis lectus. Sed vitae dignissim est, vel aliquam tellus.
+Praesent non nunc mollis, fermentum neque at, semper arcu.
+Nullam eget est sed sem iaculis gravida eget vitae justo.
+`;
+
+export function CustomMoleculeUploader(props:CMUProps) {
+    return (
+        <Grid container
+            direction={"row"}            
+            style={{ paddingBottom:'1.5em'}}
+            alignItems="center"
+        >
+            <Grid item               
+                xs={12}
+                style={{paddingBottom:'0.5em'}}
+            >
+                <Typography variant="body1" align="center" style={{color:"steelblue"}}>
+                    Upload your polymer files
+                    <Tooltip title={fileTooltip} placement="top-start">
+                        <IconButton color='primary' style={{marginTop:'-0.15em'}}>
+                            <HelpOutlineIcon />
+                        </IconButton>
+                    </Tooltip>
+                </Typography>   
+            </Grid>
+            <Grid item
+                xs={6}
+            >
+                <Button 
+                component="label"
+                style={{ paddingLeft:'2em', paddingRight:'2em'}} color="primary" variant="outlined" startIcon={<BuildCircleIcon style={{fontSize:'35px'}} />}>
+                    <Stack direction={'column'}>
+                        <Typography variant="button">Complex</Typography>
+                        <Typography variant="caption">(.json)</Typography>
+                    </Stack>
+                    <VisuallyHiddenInput 
+                        type="file"
+                        accept=".json"
+                        onChange={(e: any) => props.handleUpload(e.target.files)}
+                    />                
+                </Button>
+            </Grid>
+            <Grid item
+                xs={6}               
+            >
+                <Button 
+                    component="label"
+                    style={{paddingLeft:'2em', paddingRight:'2em'}}
+                    variant="outlined" color="primary" startIcon={<StickyNote2Icon style={{fontSize:'35px'}} />}>
+                    <Stack direction={'column'}>
+                        <Typography variant="button">Sequence</Typography>
+                        <Typography variant="caption">(.fasta)</Typography>
+                                   
+                    <VisuallyHiddenInput 
+                        type="file"
+                        accept=".fasta"
+                        onChange={(e: any) => props.handleUpload(e.target.files)}
+                    />
+                    </Stack>     
+                </Button>
+            </Grid>
+        </Grid>
+    );
+}
+
+export interface CLUProps {
+    handleUpload:(f:FileList)=>void;
+};
+export function CustomLinkUploader (props:CLUProps) {
+    return ( 
+        <Grid container
+            direction="row"
+            style={{ padding : '1em', textAlign:'center'}}
+            spacing={2}
+        >            
+            <Grid item
+                xs={12}
+            >
+                <Button 
+                    disabled={true}
+                    component="label"
+                    style={{ paddingLeft:'2em', paddingRight:'2em'}} color="primary" variant="outlined" startIcon={<ShareIcon style={{fontSize:'35px'}} />}
+                >
+                    <Stack direction={'column'}>
+                        <Typography variant="button">Library</Typography>
+                        <Typography variant="caption">(.FF)</Typography>
+                    </Stack>
+                    <VisuallyHiddenInput 
+                        type="file"
+                        accept=".ff"
+                        onChange={(e: any) => props.handleUpload(e.target.files)}
+                    />                
+                </Button>
+            </Grid>
+            <Grid item
+                xs={12}
+            >
+                <Typography variant="body1" align="center" style={{width:'100%', color:"red"}} >
+                     Currently unavailable
+                </Typography>
+            </Grid>             
+        </Grid>
+    );
+}
