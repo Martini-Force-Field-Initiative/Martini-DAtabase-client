@@ -1,3 +1,4 @@
+import { debugLog } from '../../../logger';
 import QuestionMarkIcon from "@mui/icons-material/QuestionMark";
 import Collapse from "@mui/material/Collapse";
 import { ButtonGroup, Button, Grid } from "@material-ui/core";
@@ -24,7 +25,7 @@ export default function UploaderSwitch(props: USProps, states: USStates) {
         in={open}
         timeout={1000}
         onExited={() => {
-          //console.log("Current value is " + state.value);
+          //debugLog("Current value is " + state.value);
           props.onClick(state.value);
         }}
       >
@@ -42,7 +43,7 @@ export default function UploaderSwitch(props: USProps, states: USStates) {
                 size="small"
                 value="true"
                 onClick={(e) => {
-                  //console.log("setting value to " + e.currentTarget.value)
+                  //debugLog("setting value to " + e.currentTarget.value)
                   setState({ value: true });
                 }}
               >
@@ -53,7 +54,7 @@ export default function UploaderSwitch(props: USProps, states: USStates) {
                 size="small"
                 value="false"
                 onClick={(e) => {
-                  //console.log("setting value to " + e.currentTarget.value)
+                  //debugLog("setting value to " + e.currentTarget.value)
                   setState({ value: false });
                 }}
               >

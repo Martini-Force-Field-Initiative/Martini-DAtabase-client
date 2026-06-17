@@ -1,9 +1,14 @@
+import { debugLog } from "./logger";
 import { io, Socket } from "socket.io-client";
 
 /*
 const URL = process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:4000';
 export const socket = io(URL);
 */
+
+// Connection timeout (ms) handed to socket.io-client. Raised well above the
+// 20s default so slow back-end namespaces don't drop the connection.
+const SOCKET_TIMEOUT_MS = 60000;
 
 const clientNamespaces = [
   "MembraneBuilder",
@@ -23,14 +28,14 @@ const isClientNamepaces = (value: string): value is ClientNamespaces => {
  */
 export const getSocket = (namespace: string): Socket => {
   //console.error("SOCKET::getSocket: " + namespace);
-  //console.log("==>" + SERVER_ROOT);
+  //debugLog("==>" + SERVER_ROOT);
   if (!isClientNamepaces(namespace))
     throw new Error(`[Socket:getSocket] unknown namespace "${namespace}"`);
   //const endPoint=`${SERVER_ROOT}/${namespace}`
-  //  console.log(`Low-Layer socket namespace created @${namespace}`);
-  const socketClient = io(`/${namespace}`);
+  //  debugLog(`Low-Layer socket namespace created @${namespace}`);
+  const socketClient = io(`/${namespace}`, { timeout: SOCKET_TIMEOUT_MS });
 
-  //socketClient.on( "connect", ()=> console.log(`Low-Layer socket namespace created under @${namespace}`) );
+  //socketClient.on( "connect", ()=> debugLog(`Low-Layer socket namespace created under @${namespace}`) );
   return socketClient;
 };
 
@@ -41,7 +46,7 @@ export { Socket };
  */
 
 export const getMadSocket = (namespace: string): MAD_ClientSocket => {
-  //console.log("==>" + SERVER_ROOT);
+  //debugLog("==>" + SERVER_ROOT);
 
   return new MAD_ClientSocket(getSocket(namespace));
 };
@@ -57,8 +62,8 @@ export class MAD_ClientSocket {
         if (data?.type === "error") {
           /*
                     console.error("[MAD socket errorZ] " + data);
-                    console.log(err);
-                    console.log(err !== undefined);
+                    debugLog(err);
+                    debugLog(err !== undefined);
                     */
           if (err !== undefined) {
             //    console.warn('OK');
@@ -76,7 +81,7 @@ export class MAD_ClientSocket {
   }
 
   emit(evt: string, data?: any) {
-    console.log("[MAD_ClientSocket::emit]" + evt);
+    debugLog("[MAD_ClientSocket::emit]" + evt);
     this.socket.emit(evt, data);
   }
   /* expecting answer on the same message name use to emit*/

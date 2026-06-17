@@ -1,13 +1,14 @@
+import { debugLog } from "../../../../logger";
 import { useState, useEffect } from "react";
 
 import ExpandCircleDownRoundedIcon from "@mui/icons-material/ExpandCircleDownRounded";
 import Stack from "@mui/material/Stack";
 import Box from "@mui/material/Box";
 import * as d3 from "d3";
-import { generateBlurShape } from "./customShape";
+import { generateBlurShape } from "../customShape";
 import { Typography } from "@mui/material";
 import "./Legend.css";
-import newLegend from "./new_legend.json";
+import newLegend from "../new_legend.json";
 interface LegendProps {}
 
 export function Legend(props: LegendProps) {
@@ -61,7 +62,7 @@ export function Legend(props: LegendProps) {
           .attr("transform", "translate(125, -5)")
           .append("path")
           .attr("d", (d: any) => {
-            console.log("Generating legend path");
+            debugLog("Generating legend path");
             return d.symbol === "blurShape"
               ? generateBlurShape(125)
               : //@ts-ignore

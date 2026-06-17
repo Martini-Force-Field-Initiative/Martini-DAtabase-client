@@ -1,3 +1,4 @@
+import { debugDir, debugLog } from '../../logger';
 //import ItpFile from 'itp-parser-forked';
 import ItpFile from "itp_mad_parser";
 import ReversibleKeyMap from "reversible-key-map";
@@ -76,8 +77,8 @@ export default class GoBondsHelper extends BaseBondsHelper {
   }
 
   goNameToGoIndex(name: GoAtomName) {
-    /*  console.log("goNametoGoIndex input: " + name);
-    console.dir(this.name_to_index);*/
+    /*  debugLog("goNametoGoIndex input: " + name);
+    debugDir(this.name_to_index);*/
     return this.name_to_index[name];
   }
 
@@ -86,13 +87,13 @@ export default class GoBondsHelper extends BaseBondsHelper {
   }
 
   realIndexToGoIndex(index: number) {
-    console.log("realIndexToGoIndex input: " + index);
-    console.dir(this.real_to_index);
+    debugLog("realIndexToGoIndex input: " + index);
+    debugDir(this.real_to_index);
     return this.real_to_index[index];
   }
 
   realIndexToGoName(index: number) {
-    console.log("realIndexToGoName start input " + index);
+    debugLog("realIndexToGoName start input " + index);
 
     return this.goIndexToGoName(this.realIndexToGoIndex(index));
   }
@@ -108,7 +109,7 @@ export default class GoBondsHelper extends BaseBondsHelper {
       const k2 = `${a2.chain}:${a2.realIdx}`;
 
       const newLine = line.replace(/ ([0-9.]+)[\s]+;/, ` ${epsilon} ;`);
-      console.log("ApplyLJ from " + line + " to " + newLine);
+      debugLog("ApplyLJ from " + line + " to " + newLine);
       this.relations.set(k1, k2, newLine);
     }
   }
@@ -163,7 +164,7 @@ export default class GoBondsHelper extends BaseBondsHelper {
     atom2?: number,
     line?: string,
   ) {
-    console.log(
+    debugLog(
       `[GoBondHelper:add] ${chain1}, ${atom1_or_line}, ${chain2}, ${atom2}, ${line}`,
     );
     if (atom2 === undefined || line === undefined) {
@@ -172,7 +173,7 @@ export default class GoBondsHelper extends BaseBondsHelper {
         console.error(
           "GoBondHelper:add] adding through string is not implemented",
         );
-        console.log(
+        debugLog(
           `[GoBondHelper:add] adding a full line (${chain1}) ${atom1_or_line}`,
         );
         const [name1, name2] = atom1_or_line
@@ -191,7 +192,7 @@ export default class GoBondsHelper extends BaseBondsHelper {
     else if (typeof atom1_or_line === "number") {
       // This is used at startup, by readFromItps
       if (atom1_or_line !== atom2 || chain1 !== chain2)
-        console.log(
+        debugLog(
           `[GoBondHelper:add] set relation ${chain1}:${atom1_or_line} , ${chain2}:${atom2} ${line}`,
         );
       this.relations.set(
@@ -260,7 +261,7 @@ export default class GoBondsHelper extends BaseBondsHelper {
         //const files: { [molecule_name: string]: string } = Object.create(null);
         let goNbParamFileContent = "[ nonbond_params ]\n";
         for (const [[ch_atom_1, ch_atom_2], line] of this.relations) {
-          console.log(
+          debugLog(
             `[GoBondsHelper::toOriginalFiles] ${ch_atom_1} ${ch_atom_2} ${line}`,
           );
           const index1 = parseInt(ch_atom_1.split(":")[1]); // Modified out of single set remove bond
@@ -402,7 +403,7 @@ export default class GoBondsHelper extends BaseBondsHelper {
     stage: NglWrapper,
     itp_files: File[],
   ): Promise<GoBondsHelper> {
-    console.log(`[GoBondHelper:readFromItps] Starting !!!`);
+    debugLog(`[GoBondHelper:readFromItps] Starting !!!`);
     const bonds = new GoBondsHelper(stage);
     const goBondFile = itp_files.find((e) => e.name === "go_nbparams.itp");
     const moleculeFile = itp_files.find((e) => e.name === "molecule_0.itp");
@@ -419,11 +420,11 @@ export default class GoBondsHelper extends BaseBondsHelper {
     const prefix = "molecule_0";
 
     // Step 1: Find atoms that name start by "{molecule_type}_" in category "atoms"
-    console.log(
+    debugLog(
       `[GO-VIRT] file ${moleculeFile} holds ${molecule.atoms.length} atoms`,
     );
     for (const atom_line of molecule.atoms) {
-      //      console.log(atom_line);
+      //      debugLog(atom_line);
       // Typical line is :
       // 2575 molecule_0_9       9 LYS CA  2575    0
 
@@ -432,7 +433,7 @@ export default class GoBondsHelper extends BaseBondsHelper {
       const index_corrected = Number(index);
       bonds.name_to_index[name] = index_corrected;
       bonds.index_to_name[index_corrected] = name;
-      // console.log(`[GO-VIRT] itp.atoms, mapping atom name ${name} to index ${index}`);
+      // debugLog(`[GO-VIRT] itp.atoms, mapping atom name ${name} to index ${index}`);
     }
 
     // Step 2: Associate go atom index => real atom index
@@ -453,7 +454,7 @@ export default class GoBondsHelper extends BaseBondsHelper {
 
       bonds.index_to_real[go_index_corrected] = real_index_corrected;
       bonds.real_to_index[real_index_corrected] = go_index_corrected;
-      console.log(
+      debugLog(
         `[Builder:readFromItps]${go_index_corrected}<virtPart, realPart>${real_index_corrected} ## ${virt_line}`,
       );
     }
@@ -470,16 +471,16 @@ export default class GoBondsHelper extends BaseBondsHelper {
         bonds.water_bias_records.push(line);
         continue;
       }
-      //console.log(`[GO-VIRT-SITES] bond input @ ${line}`);
+      //debugLog(`[GO-VIRT-SITES] bond input @ ${line}`);
       // Typical line is (may begin by spaces.)
       // molecule_0_9  molecule_0_14    1  0.7369739126  9.4140000000  ;  24  36  0.827
 
       // filter trim blank spaces created by regex
       const [name1, name2] = line.split(ItpFile.BLANK_REGEX);
-      //console.log(`${line} -->> name1-name2 "${name1}"-"${name2}"`);
+      //debugLog(`${line} -->> name1-name2 "${name1}"-"${name2}"`);
       const go_index_1 = bonds.goNameToGoIndex(name1),
         go_index_2 = bonds.goNameToGoIndex(name2);
-      console.log(`[GoBondHelper::goNameToGoIndex] ${name1} -> ${go_index_1}`);
+      debugLog(`[GoBondHelper::goNameToGoIndex] ${name1} -> ${go_index_1}`);
       if (go_index_1 === undefined || go_index_2 === undefined) {
         console.warn(
           `[GO-VIRT-SITES] [ Undefined go indexes for names ${name1}-${name2}. This should not happen...`,
@@ -489,7 +490,7 @@ export default class GoBondsHelper extends BaseBondsHelper {
 
       const real_index_1 = bonds.goIndexToRealIndex(go_index_1),
         real_index_2 = bonds.goIndexToRealIndex(go_index_2);
-      console.log(
+      debugLog(
         `[GoBondHelper::goIndexToRealIndex] ${go_index_1} -> ${real_index_1}`,
       );
 
@@ -501,7 +502,7 @@ export default class GoBondsHelper extends BaseBondsHelper {
       }
 
       // We add the bonds in the object
-      console.log(
+      debugLog(
         `[GoBondHelpers:readFromItps] GO bond add (0 chain filler) for ${real_index_1}, ${real_index_2} :: ${line}`,
       );
       bonds.add(0, real_index_1, 0, real_index_2, line);

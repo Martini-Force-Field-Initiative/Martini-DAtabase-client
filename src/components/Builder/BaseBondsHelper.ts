@@ -1,3 +1,4 @@
+import { debugLog } from '../../logger';
 import NglWrapper from './NglWrapper';
 import { BondsRepresentation } from './BondsRepresentation';
 import ReversibleKeyMap from 'reversible-key-map';
@@ -55,7 +56,7 @@ export default abstract class BaseBondsHelper {
      * Restore the Go/Elastic bonds collection to its initial state out of martinized ITP.
     */
     restore(mode:'go'|'elastic'){   
-      console.log("[BaseBondHelper] Restoring Go/Elastic bonds to initial state");
+      debugLog("[BaseBondHelper] Restoring Go/Elastic bonds to initial state");
       this.clearBondRepr()
       this.restoreBonds(); 
       this.historyClear();
@@ -82,7 +83,7 @@ export default abstract class BaseBondsHelper {
 
     clearBondRepr() {
       this.bondForEach( (s,t,d)=> {     
-        console.log(`[BaseBondHelper:clearBonRepr] Trying to remove ${s.chain}:${s.realIdx} - ${t.chain}:${t.realIdx}`);
+        debugLog(`[BaseBondHelper:clearBonRepr] Trying to remove ${s.chain}:${s.realIdx} - ${t.chain}:${t.realIdx}`);
         this.remove(s.chain, s.realIdx, t.chain, t.realIdx);
       });     
     }
@@ -118,20 +119,20 @@ export default abstract class BaseBondsHelper {
   /** Add the chainID of the interacting residue pairs
   */
   stringifyChainIdBonds() {
-    //console.log(`[BaseBondHelper:stringifyChainIdBonds]`)
+    //debugLog(`[BaseBondHelper:stringifyChainIdBonds]`)
     const chainEditedRelations:Relations = new ReversibleKeyMap();
     for (let [[ch_at_1, ch_at_2], data] of this.relations.entries() ) {
-      //console.log("stringifyChainIdBonds: updating ", ch_at_1, ch_at_2, data);
+      //debugLog("stringifyChainIdBonds: updating ", ch_at_1, ch_at_2, data);
       let [c1, a1] = ch_at_1.split(':');
       let [c2, a2] = ch_at_2.split(':');
       c1 = this.representation.getAtomProxy(parseInt(a1)).chainname;
       c2 = this.representation.getAtomProxy(parseInt(a2)).chainname;
       chainEditedRelations.set(`${c1}:${a1}`,`${c2}:${a2}`, data);
-      //console.log(`stringifyChainIdBonds: into ${c1}:${a1},${c2}:${a2}, ${data}`);
+      //debugLog(`stringifyChainIdBonds: into ${c1}:${a1},${c2}:${a2}, ${data}`);
     }
     this.relations = chainEditedRelations;
-    //console.log(`[BaseBondHelper:stringifyChainIdBonds] relations updated`);
-    //console.log(this.relations);
+    //debugLog(`[BaseBondHelper:stringifyChainIdBonds] relations updated`);
+    //debugLog(this.relations);
   }
 
   addCustomBonds(chain1:number|string, atom1: any, chain2:number|string, atom2: any) {
@@ -296,7 +297,7 @@ export default abstract class BaseBondsHelper {
       const b1 = parseInt(l1[1]);
       const a2 = parseInt(l2[0]);
       const b2 = parseInt(l2[1]);
-     // console.log(`|${a1}|${b1}|${a2}|${b2}|`); //a1, b1, a2, b2);
+     // debugLog(`|${a1}|${b1}|${a2}|${b2}|`); //a1, b1, a2, b2);
       if(a1 < a2)
         return -1;
       

@@ -1,3 +1,4 @@
+import { debugLog } from '../../../../logger';
 import React from "react";
 import { makeStyles, withStyles } from "@material-ui/core/styles";
 import InputLabel from "@material-ui/core/InputLabel";
@@ -78,7 +79,7 @@ export default function IdpSelector(props: IdpSelectorProps) {
   const selMinWidth = props.fieldWith ? `${props.fieldWith}em` : "3em";
 
   const onValueChange = (_start: string, _stop: string) => {
-    //console.log("[IdpSelector:onValueChange]");
+    //debugLog("[IdpSelector:onValueChange]");
     if (chain !== "" && _start !== "" && _stop !== "") {
       console.error("[IdpSetter:IdpSelector] Theme error of field");
     }
@@ -89,7 +90,7 @@ export default function IdpSelector(props: IdpSelectorProps) {
   const stopIndex = React.useRef(-1);
 
   const handleChainChange = (event: any) => {
-    //console.log("Chain change reseting start/stops");
+    //debugLog("Chain change reseting start/stops");
 
     setChain(event.target.value);
     setStart("");
@@ -102,14 +103,14 @@ export default function IdpSelector(props: IdpSelectorProps) {
   const handleStartChange = (event: any) => {
     // Make sure start index is before stop index
     const aaPosNewStart = event.target.value;
-    //console.log(`[handleStartChange] ${aaPosNewStart}`);
+    //debugLog(`[handleStartChange] ${aaPosNewStart}`);
     setStart(aaPosNewStart);
     // chainState is guaranteed to be updated here
     startIndex.current = props.atoms[chain].findIndex((i) => {
-      //console.log(`${aaPosNewStart} === ${i}`);
+      //debugLog(`${aaPosNewStart} === ${i}`);
       return i === aaPosNewStart;
     }) as number;
-    // console.log(startIndex.current);
+    // debugLog(startIndex.current);
     // Call the change hook
     onValueChange(event.target.value, stop);
   };
@@ -117,14 +118,14 @@ export default function IdpSelector(props: IdpSelectorProps) {
     // Not much to do here
     setStop(event.target.value);
     stopIndex.current = props.atoms[chain].findIndex((i) => {
-      //  console.log(`${event.target.value} === ${i}`);
+      //  debugLog(`${event.target.value} === ${i}`);
       return i === event.target.value;
     }) as number;
 
     onValueChange(start, event.target.value);
   };
   const stopPastStart = (aaName: string, aaIndex: number) => {
-    /*   console.log(
+    /*   debugLog(
       `[stopPastStart] ${aaName}, ${aaIndex} :: ${startIndex.current}`,
     );
     */

@@ -1,11 +1,17 @@
+import { debugLog, debugDir } from "../../../../logger";
 import * as React from "react";
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
-import { NumberSelect } from "./NumberSelect";
+import { NumberSelect } from "../NumberSelect";
 import HandymanIcon from "@mui/icons-material/Handyman";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import CancelIcon from "@mui/icons-material/Cancel";
+// v5 Box (the file's other Box is the @material-ui/core v4 one, which lacks `sx`).
+import MuiBox from "@mui/material/Box";
+import Tooltip from "@mui/material/Tooltip";
 
 import {
   FormControl,
@@ -24,7 +30,7 @@ import Alert from "@mui/material/Alert";
 //import ItpFile from 'itp-parser-forked';
 import ItpFile from "itp_mad_parser";
 import Grid from "@mui/material/Grid";
-import { Marger } from "../../../helpers";
+import { Marger } from "../../../../helpers";
 import {
   tweakBead,
   beadslist,
@@ -34,15 +40,21 @@ import {
   stringifyAtomRecord,
 } from "./bead_itp_tweaker";
 import ItpMadWrapper, { ItpAtomRecord } from "itp_mad_parser_ext";
+import { ErrorFix } from "./utils";
 
 interface props {
   send: (itp: ItpFile, customLinks: string[]) => Promise<void>;
   getLackBondDefITP: () => string;
   close: () => void;
-  current_position: number | undefined;
-  fixing_error: any[];
+  current_position?: number;
+  error_registry: ErrorFix[];
   update_error: (e: any) => void;
-  is_fixed: (id: number) => void;
+  //is_fixed: (id: number) => void;
+  onUpdateFixingPlan: (ids: number[]) => void;
+  // Just call above many times ^^
+  // Except if the re state rendering many times is costly
+  //  onManyFixApply: (ids: number[]) => void;
+
   toToaster: (msg: string) => void;
 }
 
@@ -56,12 +68,8 @@ interface state {
   curEndBeadCharge?: number;
   cForce: string;
   cDist: string;
+  nLeft: number;
 }
-
-/*
-  By the default bead type and the optional required charge menu should be display at each bead name change.
-
-*/
 
 interface LinkFixer {
   isFixed: boolean;
@@ -73,7 +81,7 @@ interface LinkFixer {
   endChoices: ItpAtomRecord[];
 }
 
-export default class FixLink extends React.Component<props, state> {
+export class FixLink extends React.Component<props, state> {
   linkFixers: LinkFixer[] = [];
   itpObj: ItpFile;
   static DEFAULT_DISTANCE = "0.336";
@@ -91,20 +99,32 @@ export default class FixLink extends React.Component<props, state> {
     // Set the state directly. Use props if necessary.
 
     /*
-    console.log("FIX LINK BUILDER");
-    console.log(this.props.fixing_error);
+    debugLog("FIX LINK BUILDER");
+    debugLog(this.props.fixing_error);
     */
     const baseItp = ItpMadWrapper.wrap(this.itpObj);
 
-    this.linkFixers = this.props.fixing_error.map((d) => {
+    // `idbead` is the atom number (ITP [atoms] first column, `num`). Resolve the
+    // record by matching `num`, NOT by array position: atomRecords[idbead - 1]
+    // assumes the records are dense and numbered from 1, which the missing-link
+    // ITP fragment does not guarantee. A positional miss returns a neighbouring
+    // atom with a different cgnr, which later makes equalItpAtomRecords() fail in
+    // ApplyFix (records collide on `num` but differ on `cgnr`).
+    const recordByNum = (idbead: string): ItpAtomRecord => {
+      const num = parseInt(idbead);
+      const rec = baseItp.atomRecords.find((r) => r.num === num);
+      if (rec === undefined)
+        console.error(
+          `[FixLink] no atom record with num=${num} in the missing-link ITP`,
+        );
+      return rec as ItpAtomRecord;
+    };
+
+    this.linkFixers = this.props.error_registry.map((d) => {
       return {
         isFixed: false,
-        startChoices: d.startchoice.map(
-          (b: any) => baseItp.atomRecords[parseInt(b.idbead) - 1],
-        ),
-        endChoices: d.endchoice.map(
-          (b: any) => baseItp.atomRecords[parseInt(b.idbead) - 1],
-        ),
+        startChoices: d.startchoice.map((b: any) => recordByNum(b.idbead)),
+        endChoices: d.endchoice.map((b: any) => recordByNum(b.idbead)),
         distance: FixLink.DEFAULT_DISTANCE,
         force: FixLink.DEFAULT_FORCE,
         curStartIdx: 0,
@@ -112,18 +132,19 @@ export default class FixLink extends React.Component<props, state> {
       };
     });
 
+    debugLog(`FixLink::initialPosition: ${this.props.current_position}`);
     /*
-    console.log("linkFixers::");
-    console.log(this.linkFixers);
+    debugLog("linkFixers::");
+    debugLog(this.linkFixers);
 
-    console.log("Provided ITP");
-    console.log(this.itpObj.toString());
+    debugLog("Provided ITP");
+    debugLog(this.itpObj.toString());
  */
     this.state = this.getInitialState();
   }
 
   getInitialState = (): state => {
-    const dfLinkIdx = 0;
+    const dfLinkIdx = this.props.current_position ?? 0;
     const startDfltBead = this.linkFixers[dfLinkIdx].startChoices[0];
     const endDfltBead = this.linkFixers[dfLinkIdx].endChoices[0];
 
@@ -141,13 +162,14 @@ export default class FixLink extends React.Component<props, state> {
         : undefined,
       cDist: this.linkFixers[dfLinkIdx].distance,
       cForce: this.linkFixers[dfLinkIdx].force,
+      nLeft: this.props.error_registry.length,
     };
   };
   updateBeadType = (newType: string, pos: "start" | "end") => {
     /* updates bead type in currently selected choice,
       eventually toggle charge setter
     */
-    //console.log("Updating Start bead type w/ " + newType);
+    //debugLog("Updating Start bead type w/ " + newType);
     let _ = this.linkFixers[this.state.currLinkDisplayIdx];
     if (pos === "start") {
       _.startChoices[_.curStartIdx].name = newType;
@@ -176,14 +198,14 @@ export default class FixLink extends React.Component<props, state> {
   };
 
   updateBeadCharge = (newCharge: number | undefined, pos: "start" | "end") => {
-    //console.log("Update bead charge");
+    //debugLog("Update bead charge");
     let _ = this.linkFixers[this.state.currLinkDisplayIdx];
     if (newCharge === undefined) {
-      //console.log("Reseting charge");
+      //debugLog("Reseting charge");
       newCharge = _.startChoices[_.curStartIdx].charge;
     }
-    //console.log("Updating charge");
-    //console.log(newCharge);
+    //debugLog("Updating charge");
+    //debugLog(newCharge);
 
     if (pos === "start") {
       _.startChoices[_.curStartIdx].charge = newCharge;
@@ -195,7 +217,7 @@ export default class FixLink extends React.Component<props, state> {
   };
 
   updateBeadName = (newName: string, pos: "start" | "end") => {
-    console.log("updateBeadName");
+    debugLog("updateBeadName");
     let _ = this.linkFixers[this.state.currLinkDisplayIdx];
     const choices = pos === "start" ? _.startChoices : _.endChoices;
     const newChoiceIdx = choices.findIndex((a) => a.segid === newName);
@@ -220,20 +242,39 @@ export default class FixLink extends React.Component<props, state> {
     });
   };
 
+  componentDidMount(): void {
+    debugLog("FixLink:ComponentDidMount state.currLinkDispalyIdx");
+    debugDir(this.state.currLinkDisplayIdx);
+    debugLog("FixLink:ComponentDidMount state.linkFixer");
+    debugDir(this.linkFixers);
+    this.setState({ nLeft: this.props.error_registry.length });
+    // Mark the initially displayed link as fixed. Done here (not in render) so
+    // the parent's setState runs after commit, not during our render.
+    //this.props.is_fixed(this.state.currLinkDisplayIdx);
+  }
+
   componentDidUpdate(
     prevProps: Readonly<props>,
     prevState: Readonly<state>,
     snapshot?: any,
   ): void {
+    const nLeft = this.props.error_registry.reduce(
+      (acc, lf) => (lf.is_fixed ? acc - 1 : acc),
+      this.props.error_registry.length,
+    );
+    debugLog(">>>" + this.state.nLeft);
+    if (nLeft !== this.state.nLeft) this.setState({ nLeft });
+    // Notify the parent only when the displayed link actually changes, again
+    // outside of render to avoid "update during render" warnings and to avoid
+    // re-appending the same corrected link on every re-render.
     /*
-    console.warn("FixLink component , props ::");
-    console.warn(this.props);
-    console.log(this.props, this.state)
-    */
+    if (prevState.currLinkDisplayIdx !== this.state.currLinkDisplayIdx) {
+      this.props.is_fixed(this.state.currLinkDisplayIdx);
+    }*/
   }
 
-  ApplyFix = () => {
-    //console.log(`[FixLink:ApplyFix]`);
+  ApplyFixToITP = () => {
+    // One and only (final) modification of the ITP record
     const customLinks: string[] = [];
     const newItpAtomRecords: { [key: string]: ItpAtomRecord } = {};
     // Set a warning if the same bead is defined mutlile times
@@ -241,6 +282,8 @@ export default class FixLink extends React.Component<props, state> {
     this.linkFixers.forEach((lf) => {
       const modRecord1 = lf.startChoices[lf.curStartIdx];
       const modRecord2 = lf.endChoices[lf.curEndIdx];
+      debugLog("Dispalying all newItpAtomRecords");
+      debugDir(newItpAtomRecords);
 
       if (modRecord1.num in newItpAtomRecords) {
         /*
@@ -251,6 +294,13 @@ export default class FixLink extends React.Component<props, state> {
         if (
           !equalItpAtomRecords(newItpAtomRecords[modRecord1.num], modRecord1)
         ) {
+          debugLog(
+            `ERROR: Following Itp record  (curStartIdx:${lf.curStartIdx}) are unequal`,
+          );
+          debugLog(newItpAtomRecords[modRecord1.num]);
+          debugLog("offset wd be next");
+          debugLog(newItpAtomRecords[modRecord1.num - 1]);
+          debugLog(modRecord1);
           this.conflictingDefsToaster(
             newItpAtomRecords[modRecord1.num],
             modRecord1,
@@ -268,6 +318,12 @@ export default class FixLink extends React.Component<props, state> {
         if (
           !equalItpAtomRecords(newItpAtomRecords[modRecord2.num], modRecord2)
         ) {
+          debugLog(
+            `ERROR: Following Itp record  (curEndIdx:${lf.curEndIdx} are unequal`,
+          );
+          debugLog(newItpAtomRecords[modRecord2.num]);
+          debugLog(modRecord2);
+
           this.conflictingDefsToaster(
             newItpAtomRecords[modRecord2.num],
             modRecord2,
@@ -285,8 +341,8 @@ export default class FixLink extends React.Component<props, state> {
     }
     tweakBead(this.itpObj, Object.values(newItpAtomRecords)); // this.itpObj in-place mod
 
-    console.log("[FixLink::Apply_fix] final output ITP");
-    console.log(this.itpObj.toString());
+    debugLog("[FixLink::Apply_fix] final output ITP");
+    debugLog(this.itpObj.toString());
     this.props.send(this.itpObj, customLinks).finally(() => this.props.close());
   };
 
@@ -295,12 +351,15 @@ export default class FixLink extends React.Component<props, state> {
       `Conflicting bead definitions (${stringifyAtomRecord(def1)}) and (${stringifyAtomRecord(def2)})`,
     );
   };
-  replicateFix = () => {
+  updateFixingPlan = (self: boolean) => {
     const currLinkIdx = this.state.currLinkDisplayIdx;
-
     const templateLinkFix = this.linkFixers[currLinkIdx];
-    this.linkFixers.forEach((lf, i) => {
-      if (i === currLinkIdx) return;
+
+    const lfFilter: (lf: LinkFixer, idx: number) => boolean = self
+      ? (lf, lf_idx) => lf_idx === currLinkIdx
+      : (lf, lf_idx) => true; /*lf_idx !== currLinkIdx*/
+
+    this.linkFixers.filter(lfFilter).forEach((lf, i) => {
       let startIdx: number = 0;
       let endIdx: number = 0;
       let startChoices: ItpAtomRecord[] = [];
@@ -328,32 +387,53 @@ export default class FixLink extends React.Component<props, state> {
       }
       lf.curStartIdx = startIdx;
       lf.curEndIdx = endIdx;
-      lf.startChoices = startChoices.map((_, i) =>
-        cloneAtomRecord(_, {
+      lf.startChoices = startChoices.map((_, i) => {
+        debugLog("Cloning x -> Y");
+        debugDir(_);
+        const t = cloneAtomRecord(_, {
           num: lf.startChoices[i].num,
           resnum: lf.startChoices[i].resnum,
-        }),
-      );
+          cgnr: lf.startChoices[i].cgnr,
+        });
+        debugLog(t);
+        return t;
+      });
       lf.endChoices = endChoices.map((_, i) =>
         cloneAtomRecord(_, {
           num: lf.endChoices[i].num,
           resnum: lf.endChoices[i].resnum,
+          cgnr: lf.endChoices[i].cgnr,
         }),
       );
       lf.distance = templateLinkFix.distance;
       lf.force = templateLinkFix.force;
       lf.isFixed = true;
-      this.props.is_fixed(i);
     });
+
+    // Collect the ORIGINAL indices of the links the plan touched. Reducing over
+    // the already-filtered array used the filtered-array index, so self=true
+    // always yielded [0]; apply lfFilter against the full array so lf_idx is the
+    // real index in this.linkFixers.
+    const lfs_idx = this.linkFixers.reduce(
+      (acc: number[], lf: LinkFixer, lf_idx: number) =>
+        lfFilter(lf, lf_idx) ? [...acc, lf_idx] : acc,
+      [] as number[],
+    );
+    debugLog("FixLink:onUpdateFixingPlan fires with");
+    debugLog(lfs_idx);
+    this.props.onUpdateFixingPlan(lfs_idx);
     /*
-    console.log("replicateFix: outpout");
-    console.log(this.linkFixers);
+    debugLog("replicateFix: outpout");
+    debugLog(this.linkFixers);
     */
     // Refresh rendering
     this.setState({ currLinkDisplayIdx: this.state.currLinkDisplayIdx });
   };
 
   currentResInfo = () => {
+    debugLog(
+      `FixLink::currentResInfo uses idx ${this.state.currLinkDisplayIdx}`,
+    );
     const _ = this.linkFixers[this.state.currLinkDisplayIdx];
     return [
       _.startChoices[_.curStartIdx].resname,
@@ -415,9 +495,9 @@ export default class FixLink extends React.Component<props, state> {
 
   displayedBondParams = () => {
     /*
-  console.log("displayedBondParams");
-  console.log(this.state.currLinkDisplayIdx);
-  console.log(this.linkFixers[this.state.currLinkDisplayIdx]);
+  debugLog("displayedBondParams");
+  debugLog(this.state.currLinkDisplayIdx);
+  debugLog(this.linkFixers[this.state.currLinkDisplayIdx]);
   */
     return [
       this.linkFixers[this.state.currLinkDisplayIdx].force,
@@ -425,11 +505,15 @@ export default class FixLink extends React.Component<props, state> {
     ];
   };
 
+  // Drives the centered bond-status indicator. Tied to isFixed for now (to be
+  // corrected later with a real validity check).
+  get currentLinkOk(): boolean {
+    return this.linkFixers[this.state.currLinkDisplayIdx].isFixed;
+  }
+
   render() {
-    const nLeft = this.updateFixStatus();
     const nTotal = this.linkFixers.length;
 
-    this.props.is_fixed(this.state.currLinkDisplayIdx);
     const [curStartResName, curStartResNum, curEndResName, curEndResNum] =
       this.currentResInfo();
     const [startNativeBeadType, endNativeBeadType] = this.nativeBeadTypes();
@@ -471,12 +555,47 @@ export default class FixLink extends React.Component<props, state> {
         <DialogContent style={{ paddingBottom: "0.1rem" }}>
           <Box sx={{ marginBottom: "1rem" }}>
             <Alert severity="info">
-              {`The Polyply engine could not guess parameters for ${this.props.fixing_error.length} of` +
-                ` your polymer bond${this.props.fixing_error.length > 1 ? "s" : ""}
+              {`The Polyply engine could not guess parameters for ${this.props.error_registry.length} of` +
+                ` your polymer bond${this.props.error_registry.length > 1 ? "s" : ""}
               , you can define them here.`}
             </Alert>
           </Box>
-          <Grid container component="main" spacing={2}>
+          <Grid
+            container
+            component="main"
+            spacing={2}
+            sx={{ position: "relative" }}
+          >
+            {/* Centered bond-status indicator, foreground, straddling the top
+                edge between the start/end bead panels. */}
+            <MuiBox
+              sx={{
+                position: "absolute",
+                top: "1rem",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                zIndex: 10,
+                bgcolor: "background.paper",
+                borderRadius: "50%",
+                lineHeight: 0,
+              }}
+            >
+              <Tooltip
+                title={
+                  this.currentLinkOk
+                    ? "This fix can be edited"
+                    : "This bond requires fixing"
+                }
+              >
+                {this.currentLinkOk ? (
+                  <CheckCircleIcon
+                    sx={{ fontSize: "3rem", color: "success.main" }}
+                  />
+                ) : (
+                  <CancelIcon sx={{ fontSize: "3rem", color: "error.main" }} />
+                )}
+              </Tooltip>
+            </MuiBox>
             {/*set papers intenal margin*/}
             {/* First Bead parameter "start" */}
             <Grid item xs={6} sm={6} md={6}>
@@ -863,54 +982,64 @@ export default class FixLink extends React.Component<props, state> {
               </Paper>
             </Grid>
             <Marger size="1rem" />
-            {similarResPairLinkIdx.length > 1 && (
-              <Grid item xs={12} style={{ marginTop: "-1.5rem" }}>
-                <Paper
-                  elevation={3} // Adds shadow
-                  style={{
-                    padding: 2, // Padding
-                    height: "100%", // Ensures consistent height
-                    display: "flex",
-                    flexDirection: "row",
-                    // justifyContent: "flex-end", // Aligns content to the bottom
-                    paddingRight: "2em",
-                    paddingBottom: "1em",
-                    paddingLeft: "2rem",
-                    paddingTop: "1rem",
-                  }}
+            <Grid item xs={12} style={{ marginTop: "-1.5rem" }}>
+              <Paper
+                elevation={3} // Adds shadow
+                style={{
+                  padding: 2, // Padding
+                  height: "100%", // Ensures consistent height
+                  display: "flex",
+                  flexDirection: "row",
+                  paddingRight: "2em",
+                  paddingBottom: "1em",
+                  paddingLeft: "2rem",
+                  paddingTop: "1rem",
+                }}
+              >
+                {/* Left half: always-active single-fix apply. */}
+                <MuiBox
+                  sx={{ flex: 1, display: "flex", justifyContent: "center" }}
                 >
-                  <Grid
-                    item
-                    xs={10}
-                    style={{
-                      paddingTop: "0.25rem",
-                      textAlign: "center",
-                      alignItems: "right",
-                      justifyContent: "center",
+                  <Button
+                    variant="contained"
+                    onClick={() => {
+                      debugLog("Dialog:FixLink:: APPLY_FIX click");
+                      this.updateFixingPlan(true);
                     }}
                   >
-                    <Typography>
-                      Would you like to apply this fix to every{" "}
-                      {curStartResName}
-                      {" - "}
-                      {curEndResName}
-                      {" bonds"}?
-                    </Typography>
-                  </Grid>
+                    Apply fix to this bond
+                  </Button>
+                </MuiBox>
 
-                  <Grid item xs={2}>
-                    <Button
-                      variant="contained"
-                      onClick={() => {
-                        this.replicateFix();
-                      }}
-                    >
-                      Apply
-                    </Button>
-                  </Grid>
-                </Paper>
-              </Grid>
-            )}
+                {/* Right half: replicate to all similar bonds. Disabled (with a
+                    tooltip) when no other link of the same type exists. The
+                    <span> wrapper lets the tooltip fire over a disabled button. */}
+                <MuiBox
+                  sx={{ flex: 1, display: "flex", justifyContent: "center" }}
+                >
+                  <Tooltip
+                    title={
+                      similarResPairLinkIdx.length > 1
+                        ? ""
+                        : "No other link of the same type exist in your molecule"
+                    }
+                  >
+                    <span>
+                      <Button
+                        variant="contained"
+                        disabled={similarResPairLinkIdx.length <= 1}
+                        onClick={() => {
+                          this.updateFixingPlan(false);
+                          debugLog("Dialog:FixLink:: REPLICATE_FIX click");
+                        }}
+                      >
+                        Apply fix to all {curStartResName} {curEndResName} bonds
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </MuiBox>
+              </Paper>
+            </Grid>
           </Grid>
         </DialogContent>
 
@@ -934,17 +1063,30 @@ export default class FixLink extends React.Component<props, state> {
                 this.setState({
                   currLinkDisplayIdx: this.state.currLinkDisplayIdx + 1,
                 });
+                debugLog("Dialog:FixLink:: NEXT click");
               }}
             >
               Next Link
             </Button>
           )}
 
-          {nLeft > 0 ? null : (
+          {/* SUBMIT is enabled only once every link is resolved (nLeft === 0).
+              While unresolved, show a disabled button wrapped in a tooltip (the
+              <span> lets the tooltip fire over the disabled button); the tooltip
+              is not rendered at all once everything is resolved. */}
+          {this.state.nLeft !== 0 ? (
+            <Tooltip title="you still have unresolved link">
+              <span>
+                <Button color="success" disabled>
+                  SUBMIT
+                </Button>
+              </span>
+            </Tooltip>
+          ) : (
             <Button
               color="success"
               onClick={() => {
-                this.ApplyFix();
+                this.ApplyFixToITP();
               }}
             >
               SUBMIT
@@ -954,6 +1096,7 @@ export default class FixLink extends React.Component<props, state> {
           <Button
             color="warning"
             onClick={() => {
+              debugLog("Dialog:FixLink:: CLOSE click");
               this.props.close();
             }}
           >

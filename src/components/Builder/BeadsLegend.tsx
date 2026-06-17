@@ -1,3 +1,4 @@
+import { debugLog } from '../../logger';
 import React from "react";
 import { Button, Popper } from "@mui/material";
 import * as d3 from "d3";
@@ -195,7 +196,7 @@ export default class BeadsLegend extends React.Component<
       .attr("y", 15)
       .attr("font-weight", "bold");
     //const beadsAA = getBeadsAAByType("martini3001")
-    //console.log(beadsAA);
+    //debugLog(beadsAA);
     if (this.legendValues) {
       const beadsToPlot = Object.keys(this.legendValues).filter(
         (beadName) =>

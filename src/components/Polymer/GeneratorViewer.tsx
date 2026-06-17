@@ -1,25 +1,40 @@
+import { debugDir, debugLog } from "../../logger";
 import * as React from "react";
 import * as d3 from "d3";
-import CustomContextMenu from "./Viewer/CustomContextMenu";
+import CustomContextMenu from "./PolymerViewer/widgets/CustomContextMenu";
+//import GraphicalNodeGenerator from "./Viewer/GraphicalNodeGenerator";
 import {
   SimulationNode,
   SimulationLink,
   SimulationGroup,
+  SimulationNodesArrayEqual,
+  tupleTwoStringsArrayEqual,
+  SimulationLinksArrayEqual,
+  alarmEdgeSelector,
+  SimulationNodesD3_Sel,
 } from "./SimulationType";
+
+/*  -----  the SVG creation is performed in render() ----- */
+/*
+import { SimulationEngine } from "./Viewer/SimulationEngine";
 import {
   addNodeToSVG_as_Gs,
-  initSimulation,
   setsizeSVG,
-  reloadSimulation,
   addLinkToSVG,
   setSVG,
   setnodeSize,
   removeNodes,
 } from "./Viewer";
+*/
 import CustomPolymerStash from "./CustomPolymerStash";
+import { toast } from "../Toaster";
 import "./GeneratorViewer.css";
-import { Legend } from "./Viewer/Legend";
-import { Blocker } from "./Viewer/Blocker";
+import { Legend } from "./PolymerViewer/widgets/Legend";
+import { Blocker } from "./PolymerViewer/widgets/Blocker";
+import { FinalStepBlocker } from "./PolymerViewer/widgets/FinalStepBlocker";
+import GridButton from "./PolymerViewer/widgets/GridButton";
+import { PolymerViewer } from "./PolymerViewer";
+import { makeNode } from "./PolymerViewer/nodeFactory";
 //import BottomControls from './BottomControls';
 
 interface propsviewer {
@@ -34,6 +49,16 @@ interface propsviewer {
   width: number;
   previous: { id: string; links?: any[] }[];
   highlight_node: [index: number, up: boolean];
+  correctedLinks: [string, string][];
+  errorLinks: [string, string][];
+  onErrorLinkClick: (l: SimulationLink) => void;
+  // True while a bond correction is pending. Node deletion is blocked then: it
+  // renumbers ids, which would desync the id<->resnum/idres error mapping.
+  correcting: boolean;
+  // True once the pipeline finished: lock the viewer behind the final overlay.
+  finalStep: boolean;
+  // Open the results/download dialog (from the final overlay's button).
+  onDownload: () => void;
 }
 
 interface statecustommenu {
@@ -71,7 +96,19 @@ export default class GeneratorViewer extends React.Component<
   mouseY = 0;
   prevPropsNewnode: any = null;
   prevPropsNewLink: any = null;
-  simulation!: d3.Simulation<SimulationNode, SimulationLink>;
+  polymerViewer!: PolymerViewer;
+
+  // Block-on-delete: while a bond correction is pending, refuse node deletions
+  // (they renumber ids and would corrupt the error mapping). Returns true and
+  // warns when blocked, so callers can early-return.
+  blockIfCorrecting = (): boolean => {
+    if (!this.props.correcting) return false;
+    toast(
+      "Resolve or cancel the pending bond fix before deleting nodes.",
+      "warning",
+    );
+    return true;
+  };
 
   polymer_is_modified = () => {
     this.props.modification();
@@ -79,7 +116,7 @@ export default class GeneratorViewer extends React.Component<
       .selectAll<SVGElement, SimulationLink>("line.error")
       .attr("class", "links")
       .attr("stroke", "grey");
-    //console.log("polymer_is_modified")
+    //debugLog("polymer_is_modified")
   };
 
   check_similarity = (oldNodes: any[], newNodes: any[]) => {
@@ -94,23 +131,26 @@ export default class GeneratorViewer extends React.Component<
   };
 
   componentDidMount() {
-    //console.log(this.ref )
+    //debugLog(this.ref )
     //Draw svg frame
     d3.select(this.ref)
-      .attr("style", "outline: thin solid grey;")
+      //.attr("style", "outline: thin solid grey;")
       .attr("width", this.props.width)
       .attr("height", this.props.height);
 
-    //console.log("InitSVG", this.props.height, this.props.width);
+    this.polymerViewer = new PolymerViewer(this.ref);
+    this.polymerViewer.width = this.props.width;
+    this.polymerViewer.height = this.props.height;
+    //simulationViewer.bind(this.simulationEngine);
 
-    // Init simulation
-    setsizeSVG(this.props.height, this.props.width);
-    this.simulation = initSimulation(this.nodeSize);
-    this.simulation.on("end", () => {
-      //console.warn("Computing is done");
+    this.polymerViewer.on("simulationEnd", () => {
       this.setState({ computing: false });
     });
-
+    /*  // We prefer the cotextual menu
+    this.polymerViewer.on("viewerErrorLineClick", (l) => {
+      debugLog("Event Capture viewerErrorLineClick");
+      this.props.onErrorLinkClick(l);
+    });*/
     //Define brush behaviour
     const brush = d3.brush();
     const gBrush = d3.select(this.ref).append("g").attr("class", "brush");
@@ -121,36 +161,18 @@ export default class GeneratorViewer extends React.Component<
           const selection: any = event.selection; //Get brush zone coord [[x0, y0], [x1, y1]],
           if (selection) {
             //unselect nodes
-            d3.select(this.ref)
-              .selectAll("g.nodes:not(.group_path)") //.selectAll("path:not(.group_path)")
-              .attr("class", "nodes");
-
-            //select all node inside brush zone
-            d3.select(this.ref)
-              .selectAll("g.nodes:not(.group_path)")
-              //.selectAll("path:not(.group_path)")
-              .filter(
-                (d: any) =>
-                  d.x < selection[1][0] &&
-                  d.x > selection[0][0] &&
-                  d.y < selection[1][1] &&
-                  d.y > selection[0][1],
-              )
-              .attr("class", function (d) {
-                // add on focus to class list of g.nodes
-                return `${d3.select(this).attr("class")} onfocus`;
-              });
+            this.polymerViewer.nodeHighlight({ brushZone: selection });
             /*
-                console.log("set onfocus");
-                console.log(d)
-                console.log(this)
-                console.log(d3.select(this).attr('class'))
+                debugLog("set onfocus");
+                debugLog(d)
+                debugLog(this)
+                debugLog(d3.select(this).attr('class'))
                 */
           }
         })
         .on("end", (event: any) => {
           if (!event.selection) return;
-          //console.log(event)
+          //debugLog(event)
           brush.clear(gBrush);
         }),
     );
@@ -159,22 +181,21 @@ export default class GeneratorViewer extends React.Component<
       d3
         .zoom<SVGSVGElement, unknown>()
         .scaleExtent([0.5, 1.5])
+        // Only react to wheel zoom. Without this filter d3.zoom also captures
+        // left-button mousedown as a pan gesture; that gesture is never applied
+        // (the handler only reads event.transform.k) but it steals the pointer
+        // from the per-node d3.drag(), so dragging a g.node no longer refreshes.
+        .filter((event) => event.type === "wheel")
         .on("zoom", (event) => {
           if (zoomValue !== event.transform.k) {
-            //console.log(event)
+            //debugLog(event)
             //On recupere la valeur de zoom
             zoomValue = event.transform.k;
             //On modifie le rayon en fonction du zoom
-            //console.log(event.transform.k);
-
-            d3.select(this.ref)
-              .selectAll<SVGGElement, SimulationNode>("g.nodes")
-              .attr("zoom", zoomValue)
-              .attr("transform", function () {
-                return this.getAttribute("transform") + ` scale(${zoomValue})`;
-              });
-
+            //debugLog(event.transform.k);
             //Change simulation property
+            this.polymerViewer.zoom = zoomValue;
+            /*
             this.simulation
               .force(
                 "link",
@@ -189,58 +210,93 @@ export default class GeneratorViewer extends React.Component<
                   .forceManyBody()
                   .strength(-this.nodeSize * 3 * (zoomValue * zoomValue)),
               );
+              */
             console.warn("Zoom changed calling UpdateSVG");
             this.UpdateSVG(true);
           }
         }),
     );
-    setnodeSize(this.nodeSize);
-    setSVG(this.ref);
+    this.polymerViewer.nodeSize = this.nodeSize;
+    //setSVG(this.ref);
   }
 
   componentDidUpdate(prevProps: propsviewer, prevStates: statecustommenu) {
-    //console.log("UPDATING OF GeneratorViewer " + Math.floor(Math.random() * 100000) );
-
+    //debugLog("UPDATING OF GeneratorViewer " + Math.floor(Math.random() * 100000) );
+    debugLog("GeneratorViewer:componentDidUpdate with error link props");
+    debugLog(this.props.errorLinks);
     if (
       prevProps.highlight_node[0] !== this.props.highlight_node[0] ||
       prevProps.highlight_node[1] !== this.props.highlight_node[1]
     ) {
+      // Not sure when it is fired ??
       console.warn(`!!!Nodes highlight changes, ${this.props.highlight_node}`);
+      // This has to move to polymer builder
       this.highlightNode(
         this.props.highlight_node[0],
         this.props.highlight_node[1],
       );
     }
 
-    //Check state and props
     if (
-      prevProps.newNodes !== this.props.newNodes ||
-      prevProps.newLinks !== this.props.newLinks
+      !tupleTwoStringsArrayEqual(
+        prevProps.correctedLinks,
+        this.props.correctedLinks,
+      )
     ) {
+      debugLog("--> Calling 'corrected' highlight");
+      this.polymerViewer.edgeHighlight(this.props.correctedLinks, "corrected");
+    }
+
+    if (
+      !tupleTwoStringsArrayEqual(prevProps.errorLinks, this.props.errorLinks)
+    ) {
+      debugLog(`GeneratorViewer:prevProps.errorLinks != props.errorLinks`);
+      debugDir(prevProps.errorLinks);
+      debugDir(this.props.errorLinks);
+      this.polymerViewer.edgeHighlight(this.props.errorLinks, "alarm");
+    }
+    if (
+      !SimulationNodesArrayEqual(prevProps.newNodes, this.props.newNodes) ||
+      !SimulationLinksArrayEqual(prevProps.newLinks, this.props.newLinks)
+    ) {
+      //Check state and props
       // console.warn("Nodes or links altered, calling UpdateSVG");
+      debugLog(
+        `GeneratorViewer:prevProps.newNodes != props.newNodes || prevProps.newLinks != props.newLinks`,
+      );
       this.UpdateSVG();
     }
 
     if (prevProps.width !== this.props.width) {
       d3.select(this.ref).attr("width", this.props.width);
-
+      /* S-ENGINE DEPRECATED  ???
       setsizeSVG(this.props.height, this.props.width);
-
+      */
+      this.polymerViewer.width = this.props.width;
+      /* S-ENGINE DEPRECATED  ???
       this.simulation.force("x", d3.forceX(this.props.width / 2).strength(0.2));
+      */
       //console.warn("Width changed, calling UpdateSVG");
-      this.UpdateSVG();
+      // A resize is a layout change, not a polymer edit: pass justZoom=true so
+      // UpdateSVG skips polymer_is_modified(), which would otherwise clear the
+      // in-progress fix buffer and close the FixLink dialog on window resize.
+      this.UpdateSVG(true);
     }
     if (prevProps.height !== this.props.height) {
       d3.select(this.ref).attr("height", this.props.height);
-
+      /* S-ENGINE DEPRECATED  ???
       setsizeSVG(this.props.height, this.props.width);
-      //console.log("Change height");
+      */
+      /* S-ENGINE DEPRECATED  ???
       this.simulation.force(
         "y",
         d3.forceY(this.props.height / 2).strength(0.2),
       );
+      */
+      this.polymerViewer.height = this.props.height;
       //console.warn("Height changed, calling UpdateSVG");
-      this.UpdateSVG();
+      // Layout change only — skip polymer_is_modified() (see width branch).
+      this.UpdateSVG(true);
     }
 
     if (this.props.previous.length > 0) {
@@ -252,43 +308,45 @@ export default class GeneratorViewer extends React.Component<
         d3.select(this.ref).selectAll("g.nodes").remove();
         d3.select(this.ref).selectAll("line").remove();
         CustomPolymerStash.decreaseID(true);
-      } else if (this.props.previous.length < this.simulation?.nodes().length) {
+      } else if (
+        this.props.previous.length < (this.polymerViewer.nodes() ?? []).length
+      ) {
         let newArray = this.props.previous.map(function (el) {
           return el.id;
         });
-        let node_a_supp = this.simulation
-          ?.nodes()
-          .filter((d: SimulationNode) => !newArray.includes(d.id));
-        /* console.log(
+        let node_a_supp = this.polymerViewer
+          .nodes()
+          ?.filter((d: SimulationNode) => !newArray.includes(d.id));
+        /* debugLog(
           "hop",
           this.props.previous.length,
           this.simulation?.nodes().length,
         );
          */
-        removeNodes(node_a_supp, this.UpdateSVG, () => {
-          CustomPolymerStash.decreaseID();
-        });
+        this.polymerViewer.removeNodes(node_a_supp ?? []);
       } else if (
-        this.check_similarity(this.props.previous, this.simulation?.nodes()) ===
-        false
+        this.check_similarity(
+          this.props.previous,
+          this.polymerViewer?.nodes() ?? [],
+        ) === false
       ) {
         /*
-        console.log(
+        debugLog(
           "else",
           this.props.previous.length,
           this.simulation?.nodes().length,
         );
          */
         // the number of  nodes dont change so a link has been changed
-        for (let i_node_current in this.simulation?.nodes()) {
+        for (let i_node_current in this.polymerViewer.nodes() ?? []) {
           const prev_state = this.props.previous[i_node_current];
-          const node = this.simulation?.nodes()[i_node_current];
+          const node = (this.polymerViewer.nodes() ?? [])[i_node_current];
           if (prev_state.links?.length !== node.links?.length) {
             if (node.links !== undefined) {
               for (let nodelinked of node.links) {
                 if (!prev_state.links?.includes(nodelinked.id)) {
                   // need to remove a node here into the simulation node n2
-                  //console.log(prev_state, nodelinked);
+                  //debugLog(prev_state, nodelinked);
                   let link: SimulationLink = d3
                     .select(this.ref)
                     .selectAll<SVGLineElement, SimulationLink>("line")
@@ -320,14 +378,21 @@ export default class GeneratorViewer extends React.Component<
         //console.warn("Links changed, calling UpdateSVG");
         this.UpdateSVG();
       } else {
-        //console.log("Nothing as expected");
+        //debugLog("Nothing as expected");
       }
     }
+
+    // After any update, push the brush overlay back to the bottom. The
+    // edgeHighlight (error/corrected) branches above never call UpdateSVG, so
+    // without this the brush can sit on top of freshly highlighted edges and
+    // swallow their hover/click (showing its crosshair) until a zoom — which
+    // triggers UpdateSVG — happened to re-lower it. No-op if already lowest.
+    d3.select(this.ref).select("g.brush").lower();
   }
 
   // Define graph property
   UpdateSVG = (justZoom?: boolean) => {
-    //console.log("UpdateSVG --> ", justZoom);
+    //debugLog("UpdateSVG --> ", justZoom);
     // Verifier si on doit bien ajouter des props ou si c'est deja fait
     if (this.prevPropsNewLink !== this.props.newLinks) {
       let Linktoadd: SimulationLink[] = [];
@@ -336,7 +401,7 @@ export default class GeneratorViewer extends React.Component<
         Linktoadd.push(link);
         // }
       }
-      addLinkToSVG(Linktoadd);
+      this.polymerViewer.links(Linktoadd);
     }
     // Si des news props apparaissent depuis manager on ajoute les noeuds !!!
 
@@ -350,12 +415,15 @@ export default class GeneratorViewer extends React.Component<
       if (!justZoom) this.setState({ computing: true });
       // Uncomment addNodeToSVG for working version
       //addNodeToSVG(this.props.newNodes, this.simulation, this.UpdateSVG, zoomValue)
+      this.polymerViewer.nodes(this.props.newNodes);
+      /*
       addNodeToSVG_as_Gs(
         this.props.newNodes,
         this.simulation,
         this.UpdateSVG,
         zoomValue,
       );
+       */
       //Keep the previous props in memory
       this.prevPropsNewLink = this.props.newLinks;
       this.prevPropsNewnode = this.props.newNodes;
@@ -394,10 +462,21 @@ export default class GeneratorViewer extends React.Component<
     //Send new simulation to Manager component
     if (!justZoom) this.polymer_is_modified();
     //console.warn("Calling reloadSimulation w/");
-    //console.log(groups)
+    //debugLog(groups)
+    //
+    /* S-ENGINE DEPRECATED  ???
+    reloadSimulation(this.simulation, this.ref, groups);
+    */
 
-    reloadSimulation(this.simulation, groups);
-    this.props.getSimulation_and_update_previous(this.simulation);
+    // Keep the brush overlay at the very bottom of the SVG. Edge "ghost" lines
+    // are .lower()ed (to render behind nodes) on every redraw, which would
+    // otherwise drop them *below* the brush overlay — the brush then swallows
+    // edge clicks (firing nodeHighlight via brushZone) instead of letting them
+    // reach the edge click handler. With the brush lowered last, edges/nodes
+    // receive their own clicks and the brush only activates on empty canvas.
+    d3.select(this.ref).select("g.brush").lower();
+
+    this.props.getSimulation_and_update_previous(this.polymerViewer);
   };
 
   handleClose = () => {
@@ -409,109 +488,16 @@ export default class GeneratorViewer extends React.Component<
     });
   };
 
-  pasteThesedNodes = (listNodesToPaste: any, idStarting?: string) => {
-    const idModification: any[] = [];
-    let oldNodes: SimulationNode[] = [];
-    //On parcours la selection svg des noeuds a copier
-    //et on inscrit l'ancien id et le nouveau dans une liste idModification
-    if (idStarting) {
-      let upid = 0;
-      listNodesToPaste.each((d: SimulationNode) => {
-        let newId = Number(idStarting) + upid;
-        oldNodes.push(d);
-        idModification.push({
-          oldID: d.id,
-          resname: d.resname,
-          newID: newId.toString(),
-          category: d?.category,
-          from_itp: d?.from_itp,
-        });
-        upid++;
-      });
-    } else {
-      listNodesToPaste.each((d: SimulationNode) => {
-        oldNodes.push(d);
-        idModification.push({
-          oldID: d.id,
-          resname: d.resname,
-          category: d?.category,
-          newID: CustomPolymerStash.generateID(),
-          from_itp: d?.from_itp,
-        });
-      });
-    }
-
-    //Create new node
-    let newNodes = [];
-    for (let node of oldNodes) {
-      const oldid = node.id;
-      const newid = idModification.filter((d: any) => d.oldID === oldid)[0]
-        .newID;
-
-      let newNode: SimulationNode = {
-        resname: node.resname,
-        seqid: 0,
-        id: newid,
-        is_composite: node.is_composite,
-        category: node.category,
-        from_itp: node?.from_itp,
-      };
-      newNodes.push(newNode);
-    }
-
-    addNodeToSVG_as_Gs(newNodes, this.simulation, this.UpdateSVG, zoomValue);
-    // and then addLink
-    // create newlink
-    let newlinks: SimulationLink[] = [];
-    for (let oldnode of oldNodes) {
-      const newid = idModification.filter((d: any) => d.oldID === oldnode.id)[0]
-        .newID;
-      const newnodesource = newNodes.filter((d: any) => d.id === newid)[0];
-      if (oldnode.links !== undefined) {
-        for (let oldnodelink of oldnode.links) {
-          let add = true;
-          //parmis tous les liens de l'ancien noeud je parcours et j'en creer de nouveau
-          let newtarget = idModification.filter(
-            (d: any) => d.oldID === oldnodelink.id,
-          )[0];
-          if (newtarget) {
-            const newnodetarget = newNodes.filter(
-              (d: any) => d.id === newtarget.newID,
-            )[0];
-            let newlink: SimulationLink = {
-              source: newnodesource,
-              target: newnodetarget,
-            };
-
-            //check if the link doesnt already exist
-            // Link ajouté en double Il faut check si les source target ne sont pas identiques
-
-            for (let link of newlinks) {
-              if (
-                link.source.id === newnodetarget.id &&
-                link.target.id === newnodesource.id
-              ) {
-                add = false;
-              }
-            }
-
-            if (add) newlinks.push(newlink);
-
-            if (newnodesource.links === undefined)
-              newnodesource.links = [newnodetarget];
-            else newnodesource.links!.push(newnodetarget);
-          }
-        }
-      }
-    }
-    addLinkToSVG(newlinks);
-    this.UpdateSVG();
+  pasteTheseNodes = (nodes: SimulationNode[]) => {
+    debugLog("pasting nodes");
+    debugLog(nodes);
+    this.polymerViewer.clone(nodes);
   };
 
   handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
     if (this.state.computing) {
-      //console.log("inhert click ... computing");
+      //debugLog("inhert click ... computing");
       return;
     }
     const element = document.elementFromPoint(event.clientX, event.clientY);
@@ -544,9 +530,17 @@ export default class GeneratorViewer extends React.Component<
     }
   };
 
+  flashNodes = (resname: string) => {
+    debugLog("GeneratorViewer::flashNodes");
+    this.polymerViewer.nodeFlash({ resname });
+  };
+  clearEdgeHighlights = () => {
+    this.polymerViewer.clearEdgeHighlights();
+  };
   highlightNode = (nodeIndex: number, up: boolean) => {
+    // Move this to polymerViewer
     const sel = `g.nodes[id='${nodeIndex}']`; //#${nodeIndex}`;
-    //console.log("==>" + sel);
+    debugLog("GeneratorViewer::highlightNode");
     d3.select(this.ref)
       .selectAll("g.nodes.highlight")
       .classed("highlight", false);
@@ -556,6 +550,9 @@ export default class GeneratorViewer extends React.Component<
   };
 
   render() {
+    debugLog(`GeneratorViewer hxw:${this.props.height} x ${this.props.width}`);
+    debugLog("this.state.lineClick equals ");
+    debugLog(this.state.lineClick);
     const ifContextMenuShouldAppear = (show: boolean) => {
       if (show) {
         return (
@@ -564,16 +561,106 @@ export default class GeneratorViewer extends React.Component<
             x={this.state.x}
             y={this.state.y}
             nodeClick={this.state.nodeClick}
-            hullClick={this.state.hullClick}
+            //hullClick={this.state.hullClick}
             lineClick={this.state.lineClick}
-            svg={d3.select(this.ref)}
-            handlePaste={this.pasteThesedNodes}
-            handleUpdate={this.UpdateSVG}
-            simulation={this.simulation}
+            onRemoveNodesLinks={(ns) => {
+              this.polymerViewer.removeNodesLinks(ns);
+            }}
+            isErrorLink={
+              this.state.lineClick === undefined
+                ? false
+                : this.polymerViewer.isAlarmLink(this.state.lineClick)
+            }
+            isCorrectedLink={
+              this.state.lineClick === undefined
+                ? false
+                : this.polymerViewer.isCorrectedLink(this.state.lineClick)
+            }
+            //svg={d3.select(this.ref)}
+            onDeleteLinkClick={(l) => {
+              this.polymerViewer.removeLink(l);
+            }}
+            onDeleteErrorLink={() => {
+              // OT TEST
+              this.polymerViewer.cleanAlarmLinks();
+            }}
+            onExpandHighlight={(n) =>
+              this.polymerViewer.nodeHighlight({
+                simulationNodes: [n],
+                connexExpansion: true,
+              })
+            }
+            onRemoveNodeLinksClick={(n) => {
+              this.polymerViewer.removeNodeLinks(n);
+            }}
+            onRemoveNodeClick={(n) => {
+              if (this.blockIfCorrecting()) return;
+              this.polymerViewer.removeNodes([n]);
+            }}
+            onRemoveNodes={(n) => {
+              if (this.blockIfCorrecting()) return;
+              this.polymerViewer.removeNodes(n);
+            }}
+            onPinNodesClick={(n) => {
+              this.polymerViewer.toggleAnchorSelection(n);
+            }}
+            onFixClick={() => {
+              debugLog("GeneratorViewer::onFixClick");
+              this.props.onErrorLinkClick(this.state.lineClick!);
+              // RESUME HERE
+              // Trigger modal on specific link
+              //
+              // Which will trigger updating of
+            }}
+            selectedNodes={this.polymerViewer.onFocuSelection()}
+            anchoredNodes={
+              this.polymerViewer.svgSelector(
+                ".onfocus.anchored",
+              ) as SimulationNodesD3_Sel
+            }
+            // errorLinks={this.polymerViewer.getEdgesDatumByType("alarm")}
+            handlePaste={(ns) => {
+              this.pasteTheseNodes(ns);
+            }}
+            handleUpdate={() => {
+              this.UpdateSVG();
+            }}
+            // polymerViewer={this.polymerViewer}
             zoom={zoomValue}
+            /*
             change_current_position_fixlink={
               this.props.change_current_position_fixlink
             }
+            */
+            onNuke={() => {
+              this.polymerViewer.nuke();
+              this.UpdateSVG();
+              CustomPolymerStash.decreaseID(true);
+            }}
+            onColorPicker={(
+              c: string,
+              nodeSelection: any, //d3.Selection<SimulationNode, SimulationLink>,
+            ) => {
+              debugLog(c, nodeSelection.size());
+              const resnames: string[] = [];
+              const self = this;
+              nodeSelection.each(function (d: any) {
+                const el = d3.select(this).selectAll("path");
+                debugLog("Elemt log -> ", c);
+                debugLog(el);
+                el.style("fill", c);
+                debugLog(d.resname);
+                debugDir(d);
+                resnames.push(d.resname);
+              });
+              self.polymerViewer.updateColorLibrary(c, resnames);
+            }}
+            onToggleAnchorSelection={(
+              sn: SimulationNodesD3_Sel,
+              revert?: boolean,
+            ) => {
+              this.polymerViewer.toggleAnchorSelection(sn, revert);
+            }}
           ></CustomContextMenu>
         );
       } else return;
@@ -587,34 +674,68 @@ export default class GeneratorViewer extends React.Component<
       }
     };
 
-    const handleDelete = (event: React.KeyboardEvent) => {
-      if (event.key === "Delete") {
-        let li: SimulationNode[] = [];
-        d3.select(this.ref)
-          .selectAll<SVGGElement, SimulationNode>("g.onfocus")
-          .each((node: SimulationNode) => {
-            li.push(node);
-          });
-
-        removeNodes(li, this.UpdateSVG, () => {
-          CustomPolymerStash.decreaseID();
-        });
+    const handleSelectAll = (event: React.KeyboardEvent) => {
+      // Ctrl+A / Cmd+A selects every node. The svg wrapper holds focus once the
+      // background has been left-clicked (tabIndex={0}), so the keystroke lands
+      // here; preventDefault suppresses the browser's text "select all".
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        (event.key === "a" || event.key === "A")
+      ) {
+        event.preventDefault();
+        this.polymerViewer
+          .svgSelector("g.nodes:not(.group_path)")
+          .classed("onfocus", true);
       }
     };
 
+    const handleDelete = (event: React.KeyboardEvent) => {
+      if (event.key === "Delete") {
+        if (this.blockIfCorrecting()) return;
+        let li: SimulationNode[] = [];
+        const _ = this.polymerViewer.onFocuSelection();
+        _.each((node: SimulationNode) => {
+          li.push(node);
+        });
+        this.polymerViewer.removeNodes(li);
+      }
+    };
+    {
+      /* Actual SVG creation is here */
+    }
     return (
       <div
-        className="svg"
-        onKeyDown={(e: React.KeyboardEvent) => handleDelete(e)}
+        id="svg-host"
+        onKeyDown={(e: React.KeyboardEvent) => {
+          handleSelectAll(e);
+          handleDelete(e);
+        }}
         tabIndex={0}
         onClick={(e) => {
           clickAncCloseMenu(e);
         }}
         onContextMenu={this.handleContextMenu}
-        style={{ cursor: "context-menu", position: "fixed" }}
         ref={(ref: HTMLDivElement) => (this.frame = ref)}
       >
         {this.state.computing && <Blocker />}
+        {this.props.finalStep && (
+          <FinalStepBlocker onDownload={this.props.onDownload} />
+        )}
+        <GridButton
+          active={false}
+          sx={{
+            position: "absolute",
+            top: "1.25rem",
+            left: "1rem",
+            zIndex: 300,
+            color: "gray",
+            fontSize: "2.5rem",
+            p: 0,
+          }}
+          onClick={(b) => {
+            this.polymerViewer.toggleLattice(b);
+          }}
+        />
         <Legend></Legend>
         <svg
           className="container"

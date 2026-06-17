@@ -1,3 +1,4 @@
+import { debugLog } from '../../logger';
 import * as d3 from "d3";
 import {
   SimulationNode,
@@ -132,7 +133,7 @@ export function simulationToJson(
     }
   }
 
-  //console.log("simulationToJson", "nodes", nodes,   "links", myLinks)
+  //debugLog("simulationToJson", "nodes", nodes,   "links", myLinks)
   return {
     targetPolyplyLib: ff,
     directed: false,
@@ -188,7 +189,7 @@ export function DownloadJson(
   simulation: d3.Simulation<SimulationNode, SimulationLink>,
   ff: string,
 ) {
-  console.log("Download json ! ");
+  debugLog("Download json ! ");
 
   const blob = simulationToJsonBlob(simulation, ff);
   const a = document.createElement("a");

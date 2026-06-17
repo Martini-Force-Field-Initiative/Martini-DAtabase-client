@@ -1,3 +1,4 @@
+import { debugDir, debugLog } from "../../logger";
 import { Grid, Paper } from "@mui/material";
 import * as React from "react";
 import GeneratorMenu from "./GeneratorMenu/index";
@@ -11,12 +12,14 @@ import {
 } from "./SimulationType";
 import WarningDialog from "./Dialog/warning";
 import { simulationToJson } from "./generateJson";
-import { alarmBadLinks, linkcorrected, removeNodes } from "./Viewer";
 import { getSocket, getMadSocket } from "../../Socket";
 import RunPolyplyDialog from "./Dialog/RunPolyplyDialog";
 import ItpFile from "itp_mad_parser";
 import { blue } from "@material-ui/core/colors";
-import FixLink from "./Dialog/FixLink";
+import { FixLink } from "./Dialog/FixLink";
+import { ErrorFix } from "./Dialog/FixLink/utils";
+import { PolymerViewer } from "./PolymerViewer";
+import { makeNode } from "./PolymerViewer/nodeFactory";
 import {
   Theme,
   createTheme,
@@ -45,6 +48,7 @@ import { MetadataCollection } from "../../types/entities";
 import { FileFromHttp } from "../../types/entities";
 import { PolyplyVersions } from "./GeneratorMenu";
 import { NumberSelect } from "./Dialog/NumberSelect";
+import { errorFixesFactory } from "./Dialog/FixLink/utils";
 
 // Pour plus tard
 //https://github.com/korydondzila/React-TypeScript-D3/tree/master/src/components
@@ -64,9 +68,10 @@ interface PBStates {
 
   loading: Boolean;
   stepsubmit: number | undefined;
-  errorLink: string[][];
+  //errorLink: string[][];
+  errorLinks: [string, string][];
   current_position_fixlink: number | undefined;
-  errorfix: any;
+  errorfix: ErrorFix[];
   height: number | undefined;
   width: number | undefined;
   menuHeight?: number;
@@ -80,7 +85,18 @@ interface PBStates {
   engineLoadStatus: "pending" | "error" | "success";
   theme: Theme;
   missing_link_itp_content?: string;
+  correctedLinks: [string, string][];
+  // Pipeline finished successfully -> lock the viewer behind FinalStepBlocker.
+  finalStep: boolean;
+  // Re-open the results/download dialog from the final overlay's button.
+  showResultsDialog: boolean;
+
+  resizingMenu?: boolean;
 }
+
+// Bounds for the user-resizable left menu panel.
+const MIN_MENU_WIDTH = 280;
+const MIN_VIEWER_WIDTH = 200;
 
 interface PBProps extends RouteComponentProps {
   classes: Record<string, string>;
@@ -91,10 +107,16 @@ interface PBProps extends RouteComponentProps {
 class PolymerBuilder extends React.Component<PBProps, PBStates> {
   protected root = React.createRef<HTMLDivElement>();
   protected menuRef = React.createRef<HTMLDivElement>();
+  // Right-hand SVG viewer column. Kept separate from `root` (the full main
+  // container) so size measurements in updateSizes/computeDimSVG always read
+  // the whole area, not the viewer subtree.
+  protected viewerRef = React.createRef<HTMLDivElement>();
   protected customStash = CustomPolymerStash;
   protected doSendEmail = false;
   protected pipelineRunner = new PipeLineRunner();
 
+  // field, next to generatorMenuRef
+  protected generatorViewerRef = React.createRef<GeneratorViewer>();
   protected generatorMenuRef = React.createRef<any>();
   protected documentation?: MetadataCollection;
   createTheme(hint: "light" | "dark") {
@@ -124,9 +146,8 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
     dialogWarning: "",
     loading: false,
     stepsubmit: undefined,
-    errorLink: [],
     current_position_fixlink: undefined,
-    errorfix: undefined,
+    errorfix: [],
     height: undefined,
     width: undefined,
     jobfinish: undefined,
@@ -136,6 +157,10 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
     theme: this.createTheme("light"),
     dialogType: undefined,
     engineLoadStatus: "success", // I guess
+    correctedLinks: [],
+    errorLinks: [],
+    finalStep: false,
+    showResultsDialog: false,
   };
 
   job_socket = getMadSocket("PolymerGenerator");
@@ -151,9 +176,8 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
       dialogWarning: "",
       loading: false,
       stepsubmit: undefined,
-      errorLink: [],
       current_position_fixlink: undefined,
-      errorfix: undefined,
+      errorfix: [],
       jobfinish: undefined,
       go_to_previous: [],
       add_fake_links: undefined,
@@ -161,6 +185,14 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
       //theme:this.createTheme('light'),
       dialogType: undefined,
       engineLoadStatus: "success",
+      // Clear the correction state so a fresh polymer unlocks node deletion
+      // (correcting = errorLinks.length > 0 || correctedLinks.length > 0).
+      errorLinks: [],
+      correctedLinks: [],
+      missing_link_itp_content: undefined,
+      // Leave the finalized state so the viewer is interactive again.
+      finalStep: false,
+      showResultsDialog: false,
     });
   };
 
@@ -170,13 +202,13 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
       this.state.menuWidth !== undefined &&
       this.state.height !== undefined
     ) {
-      // console.log(`[PolymeBuilder svg computation] ${this.state.width} - ${this.state.menuWidth} x ${this.state.height}`);
+      // debugLog(`[PolymeBuilder svg computation] ${this.state.width} - ${this.state.menuWidth} x ${this.state.height}`);
       return {
         h: this.state.height,
         w: this.state.width - this.state.menuWidth,
       };
     }
-    //console.log(`[PolymeBuilder svg computation] not ready`);
+    //debugLog(`[PolymeBuilder svg computation] not ready`);
     return { h: 0, w: 0 };
   };
 
@@ -187,12 +219,72 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
     const height = mainNode.clientHeight,
       width = mainNode.clientWidth,
       menuHeight = menuNode.clientHeight,
-      menuWidth = menuNode.clientWidth;
+      // Once the user (or the first measurement) owns the menu width, keep it
+      // fixed across window resizes — the viewer absorbs the size change.
+      // Re-measuring here would feed the controlled width back on itself.
+      menuWidth = this.state.menuWidth ?? menuNode.clientWidth;
     this.setState({ height, width, menuHeight, menuWidth });
-    //console.log(`[PolymerBuilder] Current main  size is ${height}hx${width}w`);
-    //console.log(`[PolymerBuilder] Current mmenu size is ${menuHeight}hx${menuWidth}w`);
+    //debugLog(`[PolymerBuilder] Current main  size is ${height}hx${width}w`);
+    //debugLog(`[PolymerBuilder] Current mmenu size is ${menuHeight}hx${menuWidth}w`);
 
     return { height, width, menuHeight, menuWidth };
+  };
+
+  // --- Resizable left menu panel ---------------------------------------
+  // The menu width is owned here so the viewer can shrink/grow in step.
+  // Element that currently holds the pointer capture for a resize drag.
+  private resizeEl: HTMLElement | null = null;
+
+  onMenuResizeStart = (e: React.PointerEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    const handle = e.currentTarget as HTMLElement;
+    // Pointer capture routes ALL subsequent pointer events for this pointer to
+    // the handle, regardless of what is under the cursor (the SVG/canvas viewer
+    // can no longer steal them). This is what keeps the drag alive end-to-end.
+    try {
+      handle.setPointerCapture(e.pointerId);
+    } catch (err) {
+      /* capture unsupported — drag still works while over the handle */
+    }
+    this.resizeEl = handle;
+    this.setState({ resizingMenu: true });
+    // Avoid selecting text while dragging.
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "ew-resize";
+    handle.addEventListener("pointermove", this.onMenuResizeMove);
+    handle.addEventListener("pointerup", this.onMenuResizeEnd);
+    handle.addEventListener("pointercancel", this.onMenuResizeEnd);
+  };
+
+  onMenuResizeMove = (e: PointerEvent): void => {
+    const mainNode = this.root.current;
+    if (!mainNode) return;
+    const { left } = mainNode.getBoundingClientRect();
+    const total = mainNode.clientWidth;
+    const menuWidth = Math.min(
+      total - MIN_VIEWER_WIDTH,
+      Math.max(MIN_MENU_WIDTH, e.clientX - left),
+    );
+    this.setState({ menuWidth });
+  };
+
+  onMenuResizeEnd = (e: PointerEvent): void => {
+    this.setState({ resizingMenu: false });
+    document.body.style.userSelect = "";
+    document.body.style.cursor = "";
+    const handle = this.resizeEl;
+    if (handle) {
+      handle.removeEventListener("pointermove", this.onMenuResizeMove);
+      handle.removeEventListener("pointerup", this.onMenuResizeEnd);
+      handle.removeEventListener("pointercancel", this.onMenuResizeEnd);
+      try {
+        handle.releasePointerCapture(e.pointerId);
+      } catch (err) {
+        /* capture already released */
+      }
+      this.resizeEl = null;
+    }
   };
 
   // Register History router on back-end side TO DO
@@ -211,7 +303,7 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
   };
 
   add_to_history_and_redirect = async (): Promise<void> => {
-    //console.log(this.state)
+    //debugLog(this.state)
     //this.computationBuffer.userId = Settings.user?.id
     this.history_socket.emit("add", this.pipelineRunner.historyData);
 
@@ -255,7 +347,7 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
     const last = copy_frame[cut];
     //PROBLEME QUAND ON NE VEUX SUPPRIMER QUE 2
     copy_frame = copy_frame.slice(0, cut);
-    //console.log("Go back to ", last);
+    //debugLog("Go back to ", last);
     if (last === undefined || last.length === 0) {
       this.setState({ go_to_previous: [{ id: "START" }] });
       this.clear();
@@ -268,29 +360,32 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
     //else this.setState({ go_to_previous: [{ "id": "START" }] })
   };
 
-  getSimulation_and_update_previous = (
-    SimulationFromViewer: d3.Simulation<SimulationNode, SimulationLink>,
-  ) => {
-    let nodes = [...SimulationFromViewer.nodes()];
+  getSimulation_and_update_previous = (polymerViewer: PolymerViewer) => {
+    let nodes = [...(polymerViewer.nodes() ?? [])];
     let old_previous = [...this.state.previous_Simulation_nodes];
     old_previous.push(this.simulation_nodes_to_frame_shape(nodes));
-    //console.log("getSimulation_and_update_previous new previous state", old_previous)
+    //debugLog("getSimulation_and_update_previous new previous state", old_previous)
     this.setState({
-      Simulation: SimulationFromViewer,
+      Simulation: polymerViewer.getSimulationLayer(),
       previous_Simulation_nodes: old_previous,
     });
-    this.customStash.setSimulation(SimulationFromViewer);
+    this.customStash.setSimulation(polymerViewer.getSimulationLayer());
   };
 
   change_current_position_fixlink = (linktofix: SimulationLink): void => {
     let c = 0;
-    for (let bordel of this.state.errorLink) {
+    for (let eLink of this.state.errorLinks) {
+      debugLog(
+        `PolymerBuilder::change_current_position_fixlink (one link check)`,
+      );
       let l = [linktofix.source.id, linktofix.target.id];
+      debugLog(`is fixed ${linktofix.source.id} , ${linktofix.target.id} `);
       // Super dumb condition
       if (
-        (bordel[0] === l[0] && bordel[1] === l[1]) ||
-        (bordel[1] === l[0] && bordel[0] === l[1])
+        (eLink[0] === l[0] && eLink[1] === l[1]) ||
+        (eLink[1] === l[0] && eLink[0] === l[1])
       ) {
+        debugLog(`yes-> setState of current_position_fixlink to ${c}`);
         this.setState({ current_position_fixlink: c });
         return;
       }
@@ -317,21 +412,33 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
 
   }
 */
-  handleFixLink = (id: number): void => {
-    //Keep a trace of which link has been fixed
-    this.state.errorfix[id].is_fixed = true;
-    let id1 = parseInt(this.state.errorfix[id]["startchoice"][0]["idres"]) - 1;
-    let id2 = parseInt(this.state.errorfix[id]["endchoice"][0]["idres"]) - 1;
-    linkcorrected(id1.toString(), id2.toString());
+  handleFixLink = (ids: number[]): void => {
+    debugLog("PolymerBuilder::handleFix : " + ids);
+    // Idempotent: if this link was already fixed, don't re-append it.
+    const newCorrectedLinks: [string, string][] = ids
+      .filter((id) => !this.state.errorfix[id].is_fixed)
+      .map((id) => {
+        //Keep a trace of which link has been fixed
+        this.state.errorfix[id].is_fixed = true;
+        const id1 =
+          parseInt(this.state.errorfix[id]["startchoice"][0]["idres"]) - 1;
+        const id2 =
+          parseInt(this.state.errorfix[id]["endchoice"][0]["idres"]) - 1;
+        return [id1.toString(), id2.toString()];
+      });
+    debugLog("PolymerBuilder::handleFix adding following newCorrectedLinks");
+    debugLog(newCorrectedLinks);
+    this.setState({
+      correctedLinks: [...this.state.correctedLinks, ...newCorrectedLinks],
+    });
   };
-
   clearModificationBuffer = (): void => {
     // aka newmodification
     // The polymer have been updated need to init some states
     this.setState({
-      errorLink: [],
+      errorLinks: [],
       current_position_fixlink: undefined,
-      errorfix: undefined,
+      errorfix: [],
       go_to_previous: [],
     });
   };
@@ -364,8 +471,19 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
           this.setState({ Warningmessage: node.resname + " not in " + this.currentForceField + ". Please add a definition for your molecule." })
         }
 
-        node.id = newid
-        newMolecule.push(node)
+        // Ingested from an external JSON graph: re-mint as a well-formed node
+        // (stamps _frozen_id_ / manually_anchored). is_composite is absent from
+        // the JSON view, so default it to false (preserves prior behaviour).
+        newMolecule.push(
+          makeNode({
+            resname: node.resname,
+            seqid: node.seqid ?? 0,
+            id: newid,
+            is_composite: node.is_composite ?? false,
+            category: node.category,
+            from_itp: node.from_itp,
+          }),
+        )
       }
 
       let newlinks = []
@@ -395,7 +513,7 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
   };
 
   addNewMolFromITP = (itpstring: string) => {
-    //console.log(`addNewMoleculeFromItp: incoming string is ${itpstring}`);
+    //debugLog(`addNewMoleculeFromItp: incoming string is ${itpstring}`);
     this.customStash.push(itpstring, "itp").then(() => {
       // Update the library/list of molecules
       this.forceRender();
@@ -403,14 +521,14 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
   };
 
   setSendEmail = (status: boolean): void => {
-    //console.log("=>setSendEmail to " + status);
+    //debugLog("=>setSendEmail to " + status);
     this.doSendEmail = status;
   };
 
   setForcefieldAndVermouthLib = (ff: string, libs: string[]): void => {
-    //console.log(`=>setForcefield to ${ff}`);
-    //console.dir(this.customStash.environments);
-    //console.log(`=>setActiveLibs to ${ff}`);
+    //debugLog(`=>setForcefield to ${ff}`);
+    //debugDir(this.customStash.environments);
+    //debugLog(`=>setActiveLibs to ${ff}`);
     try {
       this.customStash.checkSetForcefield(ff);
       this.pipelineRunner.setActiveLibs(libs);
@@ -421,13 +539,13 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
     }
   };
   addNode = (toadd: NodeInjectSpec) => {
-    //console.log(`PolymerBuilder:addNode ::`);
-    //console.log(toadd);
+    //debugLog(`PolymerBuilder:addNode ::`);
+    //debugLog(toadd);
     try {
       const { newLinks, newMolecule } =
         this.customStash.createSimulationPolymer(toadd);
-      //console.log("PolymerBuilder:addNode, SimulationPolymer created");
-      //console.log({ newLinks, newMolecule });
+      //debugLog("PolymerBuilder:addNode, SimulationPolymer created");
+      //debugLog({ newLinks, newMolecule });
       this.drawInViewer(newMolecule, newLinks);
     } catch (e) {
       //console.error(e);
@@ -436,11 +554,11 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
     this.clearModificationBuffer(); // [STASH_REFORGE:to_check]  to remove ?
   };
   addLink = (id1: string, id2: string) => {
-    //console.log(`[PolymerBuilder:addLink] ${id1}, ${id2}`);
+    //debugLog(`[PolymerBuilder:addLink] ${id1}, ${id2}`);
     try {
       const newLink = this.customStash.createSimulationLink(id1, id2);
-      //console.log("[PolymerBuilder:addLink], SimulationLink created");
-      //console.log(newLink);
+      //debugLog("[PolymerBuilder:addLink], SimulationLink created");
+      //debugLog(newLink);
       this.drawInViewer([], [newLink]);
     } catch (e) {
       //console.error(e);
@@ -479,32 +597,6 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
   };
 
   // Move to custom stash ?
-  getbeadslist = (idres: string, itpContent: string) => {
-    const itplineToDico = (li: string[]) => {
-      // 301 SC3  128 ARG SC1 301  0.0
-      let out = [];
-      for (let e of li) {
-        const esplit = e.split(" ").filter((e) => e !== "");
-        out.push({
-          idbead: esplit[0],
-          idres: esplit[2],
-          resname: esplit[3],
-          bead: esplit[4],
-        });
-      }
-      return out;
-    };
-    //console.log(`[PolymerBuilder:getbeadslist] itp content is ${itpContent}`);
-    //Need to change because id start with 0 and id res start with 1
-    const idresmodif = Number(idres) + 1;
-    const itp = ItpFile.readFromString(itpContent);
-
-    const atoms = itp.getField("atoms", true);
-    const listparseditp = itplineToDico(atoms);
-    // console.log(listparseditp)
-    // console.log(idresmodif)
-    return listparseditp.filter((e: any) => parseInt(e.idres) === idresmodif);
-  };
 
   runPolyplyPipeline = async (
     box: string,
@@ -513,7 +605,7 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
   ): Promise<void> => {
     /*
     console.warn("STARTING PIPELINE ----");
-    console.log(this.customStash.environPipeline());
+    debugLog(this.customStash.environPipeline());
     */
     this.pipelineRunner.initialize(
       this.customStash.environPipeline(),
@@ -525,7 +617,7 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
     );
 
     /*
-    console.log(
+    debugLog(
       "[PolymerBuilder::runPolyplyPipeline] " + box + " " + name + " " + number,
     );
     */
@@ -563,23 +655,23 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
 
       await this.pipelineRunner.generatePDB();
       this.setState({ stepsubmit: 4 });
-      //console.warn("STEP submit =>" + 4);
+      this.setUIasFinalStep();
     } catch (e: any) {
       /*
       console.warn("I GOT SOMETHING");
-      console.dir(e);
+      debugDir(e);
       */
       if (e instanceof PipelineLinkError) {
         /*
-        console.log(">>Displaying link errors based on");
-        console.dir(e);
+        debugLog(">>Displaying link errors based on");
+        debugDir(e);
         */
         this.displayLinkErrors(e);
         return;
       }
       /*
-      console.log(">>setUIasPipelineError based on ");
-      console.dir(e);
+      debugLog(">>setUIasPipelineError based on ");
+      debugDir(e);
       */
       this.setUIasPipelineError(e);
       return;
@@ -590,7 +682,7 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
     itpPatchFromUI: ItpFile,
     customLinks: string[],
   ) => {
-    /* console.log(
+    /* debugLog(
       "[PolymerBuilder:resumePolyplyPipeLineWithFixedLinks] resuming with following itp fix:",
     );
     */
@@ -598,7 +690,7 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
       stepsubmit: 2,
       loading: true,
       current_position_fixlink: undefined,
-      errorLink: [],
+      errorLinks: [],
     });
     //console.warn("STEP submit =>" + 2);
 
@@ -617,7 +709,7 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
       content: itpPatchFromUI.toString(),
       type: "itp",
     };
-    //console.log(itpPatched.content);
+    //debugLog(itpPatched.content);
 
     try {
       const listGraphComponent = extract_graph_component(
@@ -639,6 +731,20 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
     }
   };
 
+  setUIasFinalStep = () => {
+    /* -- Successfull Computation
+    -> Clean corrected  edges style
+    -> Make the SVG unresponsive (blocker ?) maybe a information message claiming
+    that the download fiels can be used to start a new session.
+    -> propose a button to trigger the download Dialog
+  */
+    // (1) reset corrected/error edge styling on the graph.
+    this.generatorViewerRef.current?.clearEdgeHighlights();
+    // (2)+(3) The viewer lock (FinalStepBlocker) is NOT raised here: the results
+    // dialog is still open and would cover it. It is raised when the user closes
+    // that download window (see the dialog `close` handler), which is the UI
+    // moment the comment describes.
+  };
   setUIasPipelineError = (e: any) => {
     this.setState({ stepsubmit: undefined });
     this.setState({ loading: false });
@@ -659,36 +765,16 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
       `[PolymerBuilder:salvage_failure] processing Error Links from`,
     );
     */
-    //console.dir(e);
-    e.linksErrors.forEach(([bead1, bead2]) => alarmBadLinks(bead1, bead2));
+    //debugDir(e);
+    //e.linksErrors.forEach(([bead1, bead2]) => alarmBadLinks(bead1, bead2));
+
     this.displayWarning(
-      `${e}.You can correct this mistake with \"Right click\" -> \"Remove bad links\" or with the \"FIX A BOND\" button in red`,
+      `${e}.You may patch or remove erroneous molecular bonds by right clicking on the corresponding red edge or using the bottom control button "BOND FIXER".`,
     );
 
-    const defaultErrorFix = e.linksErrors.map(([bead1, bead2]) => {
-      const beadListStart = this.getbeadslist(bead1, e.ItpWithMissingLinks);
-      const beadListEnd = this.getbeadslist(bead2, e.ItpWithMissingLinks);
-      const startBead = beadListStart[0].idbead;
-      const endbead = beadListEnd[0].idbead;
-      const startResName = beadListStart[0].resname;
-      const endResName = beadListEnd[0].resname;
-      return {
-        start: startBead,
-        end: endbead,
-        startresname: startResName,
-        endresname: endResName,
-        distance: "0.336",
-        force: "1200",
-        startchoice: beadListStart,
-        endchoice: beadListEnd,
-        is_fixed: false,
-        change_bead_1: undefined,
-        change_bead_2: undefined,
-      };
-    });
     this.setState({
-      errorLink: e.linksErrors,
-      errorfix: defaultErrorFix,
+      errorLinks: e.linksErrors,
+      errorfix: errorFixesFactory(e),
       missing_link_itp_content: e.ItpWithMissingLinks,
     });
 
@@ -699,13 +785,14 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
     this.setState({ Warningmessage: e, dialogType: "warning" });
   };
   displayError = (e: string) => {
-    //console.log("TYPE OF  Warning message is" + typeof e);
-    //console.log(e);
+    //debugLog("TYPE OF  Warning message is" + typeof e);
+    //debugLog(e);
     this.setState({ Warningmessage: e, dialogType: "fatal" });
     //console.error("FATAl ::" + e);
   };
 
   fixlinkcomponentappear = () => {
+    debugLog("Polymerbuilder::setState current_position_fixlink : 0");
     this.setState({ current_position_fixlink: 0 });
   };
 
@@ -719,9 +806,9 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
       dialogWarning: "",
       loading: false,
       stepsubmit: undefined,
-      errorLink: [],
+      errorLinks: [],
       current_position_fixlink: undefined,
-      errorfix: undefined,
+      errorfix: [],
     });
   };
 
@@ -774,6 +861,18 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
     //
   }
 
+  componentWillUnmount() {
+    window.removeEventListener("resize", this.updateSizes);
+    if (this.resizeEl) {
+      this.resizeEl.removeEventListener("pointermove", this.onMenuResizeMove);
+      this.resizeEl.removeEventListener("pointerup", this.onMenuResizeEnd);
+      this.resizeEl.removeEventListener("pointercancel", this.onMenuResizeEnd);
+      this.resizeEl = null;
+    }
+    document.body.style.userSelect = "";
+    document.body.style.cursor = "";
+  }
+
   listSimulationMolecule = (): string[] => {
     if (this.state != undefined)
       return this.state.Simulation?.nodes().map((n) => n.resname) ?? [];
@@ -797,14 +896,23 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
         throw "Unable to intialize display from provided molecule";
 
       const { newLinks, newMolecule } = polymer;
-      //console.log("PolymerBuilder:addNode, SimulationPolymer created");
-      //console.log({ newLinks, newMolecule });
+      //debugLog("PolymerBuilder:addNode, SimulationPolymer created");
+      //debugLog({ newLinks, newMolecule });
       this.drawInViewer(newMolecule, newLinks);
     } catch (e) {
       //console.error(e);
       this.setState({ Warningmessage: `${e}`, dialogType: "fatal" });
     }
     this.clearModificationBuffer(); // [STASH_REFORGE:to_check]  to remove ?
+    // Fresh molecule loaded -> drop any prior correction lock so node deletion
+    // is allowed again (correctedLinks persists across clearModificationBuffer),
+    // and leave the finalized (final-step) state.
+    this.setState({
+      correctedLinks: [],
+      missing_link_itp_content: undefined,
+      finalStep: false,
+      showResultsDialog: false,
+    });
   };
 
   onThemeChange = () => {
@@ -824,6 +932,9 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
   }
 
   render() {
+    debugLog("PolymerBuilder::render with state.errorLinks");
+    debugLog(this.state.errorLinks);
+
     const classes = this.props.classes;
     const is_dark = this.state.theme.palette.type === "dark";
 
@@ -836,18 +947,39 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
       );
     }
 
+    debugLog("PolymerBuilder FixLink display is controled by 2 below:");
+    debugLog(this.state.current_position_fixlink);
+    debugLog(this.state.missing_link_itp_content);
+
     return (
       <ThemeProvider theme={this.state.theme}>
         {/* Dialog to setup/start/access results of computation pipeline */}
-        {this.state.loading && (
+        {(this.state.loading || this.state.showResultsDialog) && (
           <RunPolyplyDialog
             send={this.runPolyplyPipeline}
-            currentStep={this.state.stepsubmit!}
+            // Reopened from the final overlay (files ready) -> jump to the
+            // download step. During a live run keep the real step (which may be
+            // undefined; the dialog handles that and must NOT be forced to 4, or
+            // it reads downloadBundle before finalFilesBundle is set).
+            currentStep={
+              this.state.showResultsDialog ? 4 : this.state.stepsubmit!
+            }
             //@ts-ignore
             getResultFilesContent={() => {
               return this.pipelineRunner.downloadBundle;
             }}
-            close={this.closeDialog}
+            close={() => {
+              // Closing the success/download window (step 4) locks the viewer
+              // behind FinalStepBlocker. Re-closing the reopened download dialog
+              // (showResultsDialog) or an already-final state keeps it locked;
+              // closing mid-run/cancel does not.
+              const final =
+                this.state.stepsubmit === 4 ||
+                this.state.showResultsDialog ||
+                this.state.finalStep;
+              this.closeDialog();
+              this.setState({ showResultsDialog: false, finalStep: final });
+            }}
             add_to_history={this.add_to_history}
             add_to_history_redirect={this.add_to_history_and_redirect}
             redirectToViewer={this.redirect_to_viewer}
@@ -864,7 +996,11 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
         {this.state.current_position_fixlink !== undefined &&
           this.state.missing_link_itp_content && (
             <FixLink
-              is_fixed={this.handleFixLink}
+              onUpdateFixingPlan={(ids) => {
+                // (...number) << RESULME HERE
+                this.handleFixLink(ids);
+              }}
+              //is_fixed={this.handleFixLink}
               current_position={this.state.current_position_fixlink}
               getLackBondDefITP={() => {
                 return this.state.missing_link_itp_content as string;
@@ -883,10 +1019,10 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
                   customLinks,
                 );
               }}
-              fixing_error={this.state.errorfix} // This is wrong shape TO RESUME HERE GLA
+              error_registry={this.state.errorfix} // This is wrong shape TO RESUME HERE GLA
               update_error={(e: any): void => {
-                //console.log(`[PolymerBuilder:FixLink::update_error]`);
-                //console.dir(e);
+                debugLog(`[PolymerBuilder:FixLink::update_error]`);
+                debugDir(e);
                 this.setState({ errorfix: e });
               }}
               toToaster={(msg) => {
@@ -922,15 +1058,28 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
             backgroundColor: this.state.theme.palette.background.default,
           }}
         >
-          {/* Left control panel */}
+          {/* Left control panel (user-resizable width) */}
           <Grid
             item
             sm={8}
             md={4}
             component={Paper}
-            elevation={6}
+            elevation={0}
             className={classes.side}
-            style={{ backgroundColor: is_dark ? "#232323" : "" }}
+            style={{
+              backgroundColor: is_dark ? "#232323" : "",
+              // Once measured/dragged, take ownership of the width so the
+              // viewer (flex-grow below) fills the remaining space.
+              ...(this.state.menuWidth !== undefined
+                ? {
+                    flexGrow: 0,
+                    flexShrink: 0,
+                    flexBasis: this.state.menuWidth,
+                    width: this.state.menuWidth,
+                    maxWidth: this.state.menuWidth,
+                  }
+                : {}),
+            }}
             ref={this.menuRef}
             square
           >
@@ -943,11 +1092,14 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
               // Add a molecule from the startup top menu
               onPolymerFormUpload={(cont, fmt, tit) => {
                 /*
-                console.log(
+                debugLog(
                   `[PolymerBuilder:onPolymerFormUpload] pushing '${fmt}'in stash:\n${cont}`,
                 );
                 */
                 this.customStash.push(cont, fmt, tit);
+              }}
+              onHighlightTargets={(resname: string) => {
+                this.generatorViewerRef.current?.flashNodes(resname);
               }}
               submitCustomITP={this.addNewMolFromITP}
               submitBundleGRO_ITP={this.onSubmitBundleGRO_ITP}
@@ -958,7 +1110,7 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
               doSendMail={this.setSendEmail}
               versions={this.state.versions}
               clear={this.clear}
-              errorlink={this.state.errorLink}
+              errorlink={this.state.errorLinks}
               //addnodeFromJson={this.addnodeFromJson}
               addnode={this.addNode}
               addlink={this.addLink} // TO DO
@@ -971,6 +1123,9 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
                 this.setState({ highlight_node: [i, b] });
               }}
               documentation={this.documentation ?? {}}
+              onResizeStart={this.onMenuResizeStart}
+              menuWidth={this.state.menuWidth}
+              finalStep={this.state.finalStep}
             />
           </Grid>
 
@@ -979,15 +1134,21 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
             item
             sm={4}
             md={8}
-            ref={this.root}
+            ref={this.viewerRef}
             style={{
               textAlign: "center",
               alignItems: "center",
               justifyContent: "center",
+              // Fill whatever the resizable menu leaves behind.
+              flexGrow: 1,
+              flexBasis: 0,
+              maxWidth: "100%",
+              minWidth: 0,
             }}
           >
             {this.root.current && (
               <GeneratorViewer
+                ref={this.generatorViewerRef}
                 modification={this.clearModificationBuffer}
                 change_current_position_fixlink={
                   this.change_current_position_fixlink
@@ -999,10 +1160,41 @@ class PolymerBuilder extends React.Component<PBProps, PBStates> {
                 }
                 newNodes={this.state.nodesToAdd}
                 newLinks={this.state.linksToAdd}
+                correctedLinks={this.state.correctedLinks}
+                errorLinks={this.state.errorLinks}
+                // Block node deletion once the ITP-correction stage is entered
+                // and keep it blocked even after completion: pending errors
+                // (errorLinks, cleared on modification) OR an applied correction
+                // (correctedLinks, which persists).
+                correcting={
+                  this.state.errorLinks.length > 0 ||
+                  this.state.correctedLinks.length > 0
+                }
+                finalStep={this.state.finalStep}
+                onDownload={() => this.setState({ showResultsDialog: true })}
                 height={this.computeDimSVG().h}
                 width={this.computeDimSVG().w}
                 previous={this.state.go_to_previous}
                 highlight_node={this.state.highlight_node}
+                onErrorLinkClick={(l: SimulationLink) => {
+                  debugLog(
+                    "PolymerBuilder:onErrorLinkClick callback store and current link",
+                  );
+                  debugLog(this.state.errorLinks);
+                  debugLog(l);
+                  const iFix = this.state.errorLinks.reduce(
+                    (acc: number | undefined, c, i) => {
+                      const [s, t] = c;
+                      const [x, y] = [l.source.id, l.target.id];
+                      debugLog(`${[s, t]} <lookup> ${[x, y]}`);
+                      if ((s === x && t === y) || (s === y && t === x))
+                        return i;
+                      return acc;
+                    },
+                    undefined,
+                  );
+                  this.setState({ current_position_fixlink: iFix });
+                }}
               />
             )}
           </Grid>

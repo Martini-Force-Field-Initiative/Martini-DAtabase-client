@@ -47,7 +47,7 @@ export const TabPanelStyles = makeStyles((theme) => ({
     root: {
       flexGrow: 1,
       backgroundColor: theme.palette.background.paper, 
-      minWidth:'100%', minHeight:500, boxShadow:'1px 2px 2px grey',
+      minWidth:'100%', minHeight:500, boxShadow:'none',
       marginBottom:'0.5em'
 
     },

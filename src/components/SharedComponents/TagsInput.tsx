@@ -1,3 +1,4 @@
+import { debugLog } from '../../logger';
 import React from 'react'
 import { TextField, Chip, makeStyles } from "@mui/material"
 import { useEffect } from "react"
@@ -22,8 +23,8 @@ export class TagsInput extends React.Component<TagsInputProps, TagsInputStates> 
 
     addChip = (key : React.KeyboardEvent) => {
         if (key.code === "Enter"){
-            //console.log("enter")
-            console.log(this.state.written_value)
+            //debugLog("enter")
+            debugLog(this.state.written_value)
             if (!(this.state.chips.includes(this.state.written_value))){
                 this.setState({chips : [...this.state.chips, this.state.written_value]})
                 this.props.onUpdateTags([...this.state.chips, this.state.written_value])

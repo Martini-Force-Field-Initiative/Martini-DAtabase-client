@@ -1,3 +1,4 @@
+import { debugLog } from '../../../../logger';
 import React, { useState } from "react";
 import { Stack, Typography } from "@mui/material";
 import TextField from "@material-ui/core/TextField";
@@ -12,7 +13,7 @@ export default function JsonBodyForm(props: BodyProps) {
   const [jsonErrorMessage, setJsonErrorMessage] = useState("");
 
   const bodyUpload = (title?: string, content?: string) => {
-    console.log(`[JsonBodyForm] uploading:\n${title}\n${content}`);
+    debugLog(`[JsonBodyForm] uploading:\n${title}\n${content}`);
 
     if (title && content) props.onBodyUpload(title, content);
     else props.onBodyUpload(jsonTitle, jsonContent);
@@ -44,7 +45,7 @@ export default function JsonBodyForm(props: BodyProps) {
       console.error("json upload error");
       props.onUploadError(e as string);
     }
-    console.log("json format finished");
+    debugLog("json format finished");
   };
 
   return (

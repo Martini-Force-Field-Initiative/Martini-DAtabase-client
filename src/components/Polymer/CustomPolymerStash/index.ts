@@ -1,8 +1,10 @@
+import { debugDir, debugLog } from "../../../logger";
 import {
   SimulationNode,
   SimulationLink,
   NodeInjectSpec,
 } from "../SimulationType";
+import { makeNode } from "../PolymerViewer/nodeFactory";
 import {
   CustomPolymer,
   NewLink,
@@ -77,8 +79,8 @@ class CustomPolymerStash {
       console.warn(`[CustomPolymerStash:userStartModel] loading udnefined model`);
     */
     /*
-    console.log(`CustomPolymerStash:setUserStartModel] userStartModel is`);
-    console.dir(this.userStartModel);
+    debugLog(`CustomPolymerStash:setUserStartModel] userStartModel is`);
+    debugDir(this.userStartModel);
     */
     // separate molecule_X.itp and go_atomtypes.itp/go_nbparams.itp
     const moleculeItps = itps
@@ -107,12 +109,12 @@ class CustomPolymerStash {
           throw `Unexpected ITP name error ${a.name} ${b.name}`;
         return parseInt(x[1]) - parseInt(y[1]);
       });
-    //console.log(`[CustomPolymerStash:userStartPolymer] moleculeItps`);
-    //console.dir(moleculeItps);
-    //console.log(`[CustomPolymerStash:userStartPolymer] goItps`);
-    //console.dir(goItps);
-    //console.log(`[CustomPolymerStash:userStartPolymer] elasticItps`);
-    //console.dir(elasticItps);
+    //debugLog(`[CustomPolymerStash:userStartPolymer] moleculeItps`);
+    //debugDir(moleculeItps);
+    //debugLog(`[CustomPolymerStash:userStartPolymer] goItps`);
+    //debugDir(goItps);
+    //debugLog(`[CustomPolymerStash:userStartPolymer] elasticItps`);
+    //debugDir(elasticItps);
     if (moleculeItps.length === 0)
       throw `The provided ITP files must be named 'molecule_X.itp', with X consecutive integers`;
     this._userStartModel = {
@@ -124,8 +126,8 @@ class CustomPolymerStash {
       },
     };
 
-    //console.log(`[CustomPolymerStash:userStartModel] following model loaded`);
-    //console.log(this._userStartModel);
+    //debugLog(`[CustomPolymerStash:userStartModel] following model loaded`);
+    //debugLog(this._userStartModel);
   }
   get userStartPolymer(): NewPolymer | undefined {
     /**
@@ -164,14 +166,14 @@ class CustomPolymerStash {
         if (atomMap.has(atomNumber))
           console.error("Should not happen:", atomNumber, "already in map");
         if (buffer[4] !== "BB") return;
-        const _ = {
+        const _ = makeNode({
           resname: buffer[3],
           seqid: itpRank,
           id: this.generateID(),
           is_composite: !this.isAtomicElement(buffer[3]),
           category: this.getPolymerCategory(buffer[3]),
           from_itp: extract_from_itp(src),
-        };
+        });
         atomMap.set(atomNumber, _);
         newMolecule.push(_);
       });
@@ -197,14 +199,14 @@ class CustomPolymerStash {
           throw `[CustomPolymerStash:generateNewPolymerFromItp] Atom '${a1} (${buffer[0]})' or '${a2} (${buffer[1]})' not found in model`;
 
         //@ts-ignore
-        //console.dir(crossLink(atomMap.get(a1), atomMap.get(a2)));
+        //debugDir(crossLink(atomMap.get(a1), atomMap.get(a2)));
         //@ts-ignore
         newLinks.push(crossLink(atomMap.get(a1), atomMap.get(a2)));
       });
     });
     //console.warn(`[CustomPolymerStash:generateNewPolymerFromItp] loaded atomMap and links`);
 
-    //console.dir(atomMap);
+    //debugDir(atomMap);
 
     return { newMolecule, newLinks };
   }
@@ -289,7 +291,7 @@ class CustomPolymerStash {
       }
     }
     //console.warn('[CustomPolymerStash:setPolyplyTypes]');
-    //console.dir(this.polyplyResName);
+    //debugDir(this.polyplyResName);
   }
   set environments(envs: any) {
     this._environments = { ...envs };
@@ -314,8 +316,8 @@ class CustomPolymerStash {
   We don't make ff correspondance check, ...
   */
 
-    //console.log(`[CustomPolymerStash:push] :\n${title}\n${format}\n${content}`);
-    //console.log(this);
+    //debugLog(`[CustomPolymerStash:push] :\n${title}\n${format}\n${content}`);
+    //debugLog(this);
     const src = new Source(format);
 
     try {
@@ -323,7 +325,7 @@ class CustomPolymerStash {
       if (polymers.length === 0) throw `Your polymer looks empty`;
       if (title !== undefined && polymers.length !== 1)
         throw `A single name was provided for ${polymers.length} polymers to register`;
-      //console.log(polymers);
+      //debugLog(polymers);
       polymers.forEach((polymer) => {
         if (polymer.name === "")
           if (title === undefined)
@@ -350,7 +352,7 @@ class CustomPolymerStash {
       if (this.pushFailureCallback !== undefined)
         this.pushFailureCallback(e as string);
     }
-    // console.log(this.getPolyPlyLibrary());
+    // debugLog(this.getPolyPlyLibrary());
   }
 
   private toStash(polymer: CustomPolymer, format: string, visible?: boolean) {
@@ -471,7 +473,7 @@ class CustomPolymerStash {
   }
   getItpFile(name: string): ItpFile | undefined {
     console.error("[CustomStash:getItpFile] Not implemented");
-    //console.log(this.activeLibrary);
+    //debugLog(this.activeLibrary);
     return undefined;
   }
 
@@ -513,9 +515,9 @@ class CustomPolymerStash {
   }
 
   private getPolymerCategory(polymerName: string): string | undefined {
-    //console.log("CustomPolymerStash:getPolymerCategory for ", polymerName);
+    //debugLog("CustomPolymerStash:getPolymerCategory for ", polymerName);
     const activeLibrary = this.activeLibrary;
-    //console.log(activeLibrary);
+    //debugLog(activeLibrary);
     if (!activeLibrary) return undefined;
     for (const [cat, mols] of Object.entries(activeLibrary)) {
       if (mols.find((mol) => mol[2] === polymerName)) return cat;
@@ -526,17 +528,17 @@ class CustomPolymerStash {
     buildingBlockName: string,
     size: number,
   ): NewPolymer => {
-    /*  console.log(
+    /*  debugLog(
       `[CustomPolymerStash:buildNewHomoPolymer] ${buildingBlockName}`,
     );*/
     let newMolecule: SimulationNode[] = [];
     let newLinks: SimulationLink[] = [];
     for (let i = 0; i < size; i++) {
-      /*console.log(
+      /*debugLog(
         `[CustomPolymerStash:buildNewHomoPolymer]: ${buildingBlockName} block ${i}`,
       );*/
       const customPolymer = this.mayExpand(buildingBlockName); // Try to unfold building block as a linear polymer itself
-      //console.log(customPolymer);
+      //debugLog(customPolymer);
 
       if (customPolymer !== undefined) {
         if (i > 0)
@@ -562,15 +564,17 @@ class CustomPolymerStash {
       console.warn(this.polyPlyLibrary);
       console.warn(this.getPolymerCategory(buildingBlockName));*/
 
-      newMolecule.push({
-        // TODO:GL RESUME ATTACHING CATEGORY
-        resname: buildingBlockName,
-        seqid: 0,
-        id: this.generateID(),
-        category: this.getPolymerCategory(buildingBlockName),
-        is_composite: false,
-        //   from_itp:: undefined //
-      });
+      newMolecule.push(
+        makeNode({
+          // TODO:GL RESUME ATTACHING CATEGORY
+          resname: buildingBlockName,
+          seqid: 0,
+          id: this.generateID(),
+          category: this.getPolymerCategory(buildingBlockName),
+          is_composite: false,
+          //   from_itp:: undefined //
+        }),
+      );
       if (i > 0)
         newLinks.push(
           crossLink(
@@ -596,11 +600,11 @@ class CustomPolymerStash {
         throw `The residue '${toadd.add_to_every_residue}' is not present in your current polymer."`;
 
       /*
-      console.log(
+      debugLog(
         `[CustomPolymerStash:createSimulationPolymer::add_to_every_residue]`,
       );
       */
-      //console.log(toadd);
+      //debugLog(toadd);
 
       let newMolecule: SimulationNode[] = [];
       let newLinks: NewLink[] = [];
@@ -616,14 +620,14 @@ class CustomPolymerStash {
       return { newMolecule, newLinks };
     }
 
-    //console.log(`[CustomPolymerStash:createSimulationPolymer::no anchor]`);
-    //console.log(toadd);
+    //debugLog(`[CustomPolymerStash:createSimulationPolymer::no anchor]`);
+    //debugLog(toadd);
     const { newMolecule, newLinks } = this.buildNewHomoPolymer(
       toadd.moleculeToAdd,
       toadd.numberToAdd,
     );
-    //console.log(`[CustomPolymerStash:createSimulationPolymer] Returning`);
-    //console.log({ newMolecule, newLinks });
+    //debugLog(`[CustomPolymerStash:createSimulationPolymer] Returning`);
+    //debugLog({ newMolecule, newLinks });
     return { newMolecule, newLinks };
   }
 
@@ -649,30 +653,30 @@ class CustomPolymerStash {
     // We recursively try to expand its elements, if one sinle non atomic element is encountered
     // The top-level polymer is considered non expandable
 
-    //console.log(`[CustomPolymerStash::mayExpand] ${moleculeName}`);
-    //console.log(this.baseLibraryElement);
+    //debugLog(`[CustomPolymerStash::mayExpand] ${moleculeName}`);
+    //debugLog(this.baseLibraryElement);
 
     if (this.baseLibraryElement?.includes(moleculeName)) return undefined;
     const customPolymer = this.stash.get(moleculeName);
     if (!customPolymer)
       throw `A polymer named '${moleculeName}' is not in the library!`;
-    /*console.log(
+    /*debugLog(
       `[CustomPolymerStash::mayExpand] ${moleculeName} polymer block is`,
     );
-    console.log(customPolymer);
+    debugLog(customPolymer);
     */
     // This custom polymer doesn't feature components, we just return it
     if (customPolymer.iTopology.nodeNumber == 0)
       return {
         newMolecule: [
-          {
+          makeNode({
             resname: moleculeName,
             seqid: 0,
             id: this.generateID(),
             is_composite: !customPolymer.isAtomic,
             category: this.getPolymerCategory(moleculeName),
             from_itp: customPolymer?.from_itp,
-          },
+          }),
         ],
         newLinks: [],
       };
@@ -687,14 +691,16 @@ class CustomPolymerStash {
       if (!safe) return;
 
       if (this.isAtomicElement(e.resname)) {
-        newMolecule.push({
-          // TO DO: ATTACH CATEGORY PROPERTY
-          resname: e.resname,
-          seqid: 0, // This will have to be fixed ? or is it later handled by the simulation ?
-          id: this.generateID(),
-          is_composite: false,
-          category: this.getPolymerCategory(e.resname),
-        });
+        newMolecule.push(
+          makeNode({
+            // TO DO: ATTACH CATEGORY PROPERTY
+            resname: e.resname,
+            seqid: 0, // This will have to be fixed ? or is it later handled by the simulation ?
+            id: this.generateID(),
+            is_composite: false,
+            category: this.getPolymerCategory(e.resname),
+          }),
+        );
         if (idx > 0)
           newLinks.push(crossLink(newMolecule[idx - 1], newMolecule[idx]));
         idx += 1;

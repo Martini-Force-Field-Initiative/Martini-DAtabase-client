@@ -1,5 +1,6 @@
 
 export const DEBUG_MODE: boolean = process.env.NODE_ENV !== 'production';
+export const GIT_HASH: string = process.env.REACT_APP_GIT_HASH ?? 'dev';
 export const SERVER_ROOT = DEBUG_MODE ? "http://localhost:8080/" : "/"; //8080  refers to the mapping from the docker forwarded port
 export const API_URL = SERVER_ROOT + "api/";
 export const STEPS = {

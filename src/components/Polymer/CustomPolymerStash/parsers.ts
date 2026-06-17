@@ -1,3 +1,4 @@
+import { debugDir, debugLog } from '../../../logger';
 import { CustomPolymer, ValidFormats, validFormats } from "./types";
 import { fastaConvert } from "./simulationInterface";
 
@@ -59,8 +60,8 @@ export class Source {
       const polymers: CustomPolymer[] = [];
       const itpContent = ItpFile.readManyFromString(input);
       for (const itp of itpContent) {
-        console.log("One ITP incoming");
-        console.dir(itp);
+        debugLog("One ITP incoming");
+        debugDir(itp);
 
         const polymer: CustomPolymer = {
           name: itp.name,
@@ -92,14 +93,14 @@ export class Source {
     // Handles parsing logic and PolymerBuilder:addNEwMolFromItp logics
     /*
     reader.onload = (event: any) => {
-      console.log("LOOK HERE");
-      console.log(event.target.result);
+      debugLog("LOOK HERE");
+      debugLog(event.target.result);
       if (event.target.result.includes("moleculetype")) {
-        console.log("Valid .itp file");
+        debugLog("Valid .itp file");
         this.props.addNewMolFromITP(event.target.result)
         this.setState({ expertUploadedMolecule: true })
       } else {
-        console.log("Invalid file. Not a well-formed .itp file");
+        debugLog("Invalid file. Not a well-formed .itp file");
         this.props.warningfunction("Invalid file. Field : [ moleculetype ] is not found in the file loaded. Not a well-formed .itp file")
       }
     };*/
@@ -137,7 +138,7 @@ export class Source {
   private FASTA_parser(f: File | string): Promise<CustomPolymer[]> {
     // Quick and dirty
 
-    console.log(`[CustomPolymerStash:FASTA_parser] ${f}`);
+    debugLog(`[CustomPolymerStash:FASTA_parser] ${f}`);
     return new Promise((res, rej) => {
       if (!(typeof f === "string")) {
         rej("FASTA parser only accepts string");

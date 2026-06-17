@@ -1,3 +1,4 @@
+import { debugDebug, debugDir, debugLog } from '../../logger';
 import ReversibleKeyMap from "reversible-key-map";
 import BaseBondsHelper, {
   BaseBondsHelperJSON,
@@ -14,7 +15,7 @@ export default class ElasticBondsHelper extends BaseBondsHelper {
     [chainIdx: number]: { [itpIdx: number]: number };
   } = {}; //[mol_idx, itp_idx]
   protected constructor(stage: NglWrapper) {
-    console.debug(`ElasticBondsHelper constructor`);
+    debugDebug(`ElasticBondsHelper constructor`);
     super(stage);
   }
 
@@ -55,7 +56,7 @@ export default class ElasticBondsHelper extends BaseBondsHelper {
     //GLA-WIP
     if (atom2 === undefined || line === undefined) {
       // This is used at startup, by readFromItps
-      //console.log(`[ElasticBondsHelper:add] adding a full line (${chain1}) ${atom1_or_line}`)
+      //debugLog(`[ElasticBondsHelper:add] adding a full line (${chain1}) ${atom1_or_line}`)
       // as string, '36 41 1 0.78964 500.0'
       // If interchain ware to happen here we should rely on offset number ?
       // We need offset chain count number here !
@@ -81,9 +82,9 @@ export default class ElasticBondsHelper extends BaseBondsHelper {
       }
     } else if (typeof atom1_or_line === "number") {
       /*  if (atom1_or_line !== atom2)
-            console.log(`[ElasticBondsHelper:add] set relation ${chain1}:${atom1_or_line} , ${chain2}:${atom2} ${line}`)
+            debugLog(`[ElasticBondsHelper:add] set relation ${chain1}:${atom1_or_line} , ${chain2}:${atom2} ${line}`)
       */
-      //console.log(`[ElasticBondsHelper:add] set relation ${chain1}:${atom1_or_line} , ${chain2}:${atom2} ${line}`)
+      //debugLog(`[ElasticBondsHelper:add] set relation ${chain1}:${atom1_or_line} , ${chain2}:${atom2} ${line}`)
       this.relations.set(
         `${chain1}:${atom1_or_line}`,
         `${chain2}:${atom2}`,
@@ -137,8 +138,8 @@ export default class ElasticBondsHelper extends BaseBondsHelper {
     //console.warn(`[ElasticBondHelper:toOriginalFiles]I should write this:${bonds}`);
     //}
     const allSortedLines = this.getRelationLinesSorted(this.relations);
-    /*console.log("####");
-    console.log(s);
+    /*debugLog("####");
+    debugLog(s);
     for (const line of s){
         console.warn(`[ElasticBondHelper:toOriginalFiles]I should write this:${line}`);
     }*/
@@ -205,9 +206,9 @@ export default class ElasticBondsHelper extends BaseBondsHelper {
   itpTupleToNglIndex(chainIdx: number, itpIndex: number) {
     /*
     console.warn(`_itpTupleToNglIdx accessing ${chainIdx}, ${itpIndex}`);
-    console.dir(this._itpTupleToNglIdx)
-    console.log(typeof(chainIdx));
-    console.log(this._itpTupleToNglIdx[chainIdx])
+    debugDir(this._itpTupleToNglIdx)
+    debugLog(typeof(chainIdx));
+    debugLog(this._itpTupleToNglIdx[chainIdx])
     */
     return this._itpTupleToNglIdx[chainIdx][itpIndex];
   }

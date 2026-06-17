@@ -104,7 +104,7 @@ export default function ContactPage() {
             required
             className={classes.text}
             multiline
-            rows={5}
+            minRows={5}
           />
 
           <Marger size="1.5rem" />  

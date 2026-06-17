@@ -1,3 +1,4 @@
+import { debugLog } from '../../logger';
 import React from "react";
 import { v4 as uuid } from "uuid";
 import { toast } from "../Toaster";
@@ -62,9 +63,9 @@ class MoleculeViewer extends React.Component<MVProps, MVState> {
   }
 
   changeAutospin = () => {
-    //console.log("autospin before", this.state.autospin)
+    //debugLog("autospin before", this.state.autospin)
     const newValue = this.state.autospin ? false : true;
-    //console.log("autospin new value", newValue)
+    //debugLog("autospin new value", newValue)
     this.setState({ autospin: newValue });
     this.ngl.stage.setSpin(newValue);
   };
@@ -105,8 +106,8 @@ class MoleculeViewer extends React.Component<MVProps, MVState> {
       .then(async ({ radius, pdb, top, itps }) => {
         // Apply the radius to NGL
         applyUserRadius(radius);
-        console.log(this.props.ff);
-        console.log(Settings.martinize_variables.force_fields_info);
+        debugLog(this.props.ff);
+        debugLog(Settings.martinize_variables.force_fields_info);
         const polarizableFF =
           Settings.martinize_variables.force_fields_info[this.props.ff]
             .polarizable;

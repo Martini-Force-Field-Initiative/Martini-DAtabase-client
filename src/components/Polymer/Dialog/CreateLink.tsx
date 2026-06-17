@@ -1,3 +1,4 @@
+import { debugLog } from '../../../logger';
 import * as React from 'react';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
@@ -107,7 +108,7 @@ export default class CreateLink extends React.Component<props, state> {
         console.error(">>implement CustomPolymerStash.listBeads")
         const itpFile = this.props.ItpStore.getItpFile(itpname);
         const beads = this.extract_idbeads(itpFile.getField('atoms'))
-        console.log( beads)
+        debugLog( beads)
         this.setState({ beadlistitp1: beads })
     }
 

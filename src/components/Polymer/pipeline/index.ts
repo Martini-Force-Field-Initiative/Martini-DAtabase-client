@@ -1,3 +1,4 @@
+import { debugDir, debugLog } from '../../../logger';
 import { getMadSocket, MAD_ClientSocket } from "../../../Socket";
 import {
   ClientPipelineInputsGRO,
@@ -73,10 +74,10 @@ export class PipeLineRunner {
     this.box = box;
 
     console.warn("INIT==>", this.environment);
-    console.dir(this.environment);
+    debugDir(this.environment);
   }
   setActiveLibs(libs: string[]) {
-    //console.log(`[PolymerBuilder:PipelineRunner] setActiveLibs ${libs}`);
+    //debugLog(`[PolymerBuilder:PipelineRunner] setActiveLibs ${libs}`);
     this._vermouthLibs = libs;
   }
   async generateITP(name: string, polymer: PolymerView): Promise<void> {
@@ -90,8 +91,8 @@ export class PipeLineRunner {
     this.name = name;
     this.polymer = polymer;
     /*
-    console.log("Lets GO");
-    console.log(polymer);
+    debugLog("Lets GO");
+    debugLog(polymer);
     */
     const { customITP } = this.environment;
     const inputs = {
@@ -120,7 +121,7 @@ export class PipeLineRunner {
         console.warn(
           `got an instance of PipelineLinkError, I am grabbing the produced ITP from it`,
         );
-        console.dir(e);
+        debugDir(e);
         //this.ITP_step_results = trError.ItpWithMissingLinks;
       }
 
@@ -152,7 +153,7 @@ export class PipeLineRunner {
     }
 
     console.warn("==>", this.environment);
-    console.dir(this.environment);
+    debugDir(this.environment);
 
     const { userStartGRO, customITP } = this.environment;
     const { listGraphComponent } = inputGenerateGRO;
@@ -243,8 +244,8 @@ export class PipeLineRunner {
       name: this.name as string,
       userId: this.userId as string,
     };
-    console.log(`[PolymerBuilder:PipeLineRunner:historyData] historyData:`);
-    console.dir(_);
+    debugLog(`[PolymerBuilder:PipeLineRunner:historyData] historyData:`);
+    debugDir(_);
     return _;
   }
 

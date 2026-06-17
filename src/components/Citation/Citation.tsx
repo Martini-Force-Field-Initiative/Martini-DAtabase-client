@@ -1,3 +1,4 @@
+import { debugDir, debugLog } from '../../logger';
 import { Typography, Container } from "@material-ui/core";
 import React, { useEffect, useState } from "react";
 import ApiHelper from "../../ApiHelper";
@@ -29,7 +30,7 @@ import FormatQuoteIcon from "@material-ui/icons/FormatQuote";
 import Dialog from "@material-ui/core/Dialog";
 
 export default function CitationPage() {
-  console.dir(Settings.bibliography);
+  debugDir(Settings.bibliography);
   // Initialized default checked bibliography items
   //
   const defaultChecked = Settings.bibliography.reduce((aliases, bibSection) => {
@@ -39,12 +40,12 @@ export default function CitationPage() {
     });
     return aliases;
   }, []);
-  console.log(defaultChecked);
+  debugLog(defaultChecked);
   const [checked, setChecked] = React.useState(defaultChecked);
   const [openDialog, setOpenDialog] = useState(false);
   const [singleQuote, setSingleQuote] = useState(undefined);
   const handleToggle = (value) => {
-    console.log("Clicking on " + value);
+    debugLog("Clicking on " + value);
     const currentIndex = checked.indexOf(value);
     const newChecked = [...checked];
 
@@ -58,15 +59,15 @@ export default function CitationPage() {
   };
 
   const download = async (event) => {
-    console.log("Download");
-    console.dir(event.target.value);
+    debugLog("Download");
+    debugDir(event.target.value);
     const aliases = singleQuote !== undefined ? [singleQuote.alias] : checked;
-    console.log(aliases);
+    debugLog(aliases);
     const resp = await ApiHelper.request("cite/refs", {
       parameters: { format: event.target.value, aliases },
       mode: "text",
     });
-    console.log(resp);
+    debugLog(resp);
 
     const blob = new Blob([resp], { type: "text/plain" }); // Create a Blob
     const url = window.URL.createObjectURL(blob);
@@ -103,7 +104,7 @@ export default function CitationPage() {
   const handleCloseDialog = () => {};
   const getContentFromAlias = (alias) => {
     for (const sec of Settings.bibliography) {
-      console.dir(sec);
+      debugDir(sec);
       for (const item of sec.items) {
         if (item.alias === alias) return item.content;
       }
@@ -122,13 +123,13 @@ export default function CitationPage() {
     };
 
     if (singleQuote !== undefined) {
-      console.log("SP");
-      console.log(singleQuote.content);
+      debugLog("SP");
+      debugLog(singleQuote.content);
       return oneShort(singleQuote.content);
     }
     if (checked.length > 0) {
-      console.log("MP");
-      console.log(checked);
+      debugLog("MP");
+      debugLog(checked);
 
       return checked.reduce((prev, alias, i) => {
         const _ = getContentFromAlias(alias);
@@ -260,7 +261,7 @@ export default function CitationPage() {
                   role={undefined}
                   dense
                   onClick={() => {
-                    console.log("CB click");
+                    debugLog("CB click");
                     handleToggle(`${item.alias}`);
                   }}
                 >

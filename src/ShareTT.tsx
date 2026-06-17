@@ -1,3 +1,4 @@
+import { debugLog } from './logger';
 import React from 'react';
 import { FormControl, InputLabel, Select, MenuItem } from "@material-ui/core";
 //import { Alert } from '@material-ui/lab';
@@ -27,15 +28,15 @@ type State = {
     }
   
     private handleTooltipClose(): void {
-        console.log("httC..");
+        debugLog("httC..");
         this.setState({ open: false });
-        console.log("httC done");
+        debugLog("httC done");
     }
   
     private handleTooltipOpen(): void {
-        console.log("httO.."); 
+        debugLog("httO.."); 
         this.setState({ open: true });
-        console.log("httO done");             
+        debugLog("httO done");             
     }
   
     render() {
@@ -59,6 +60,40 @@ type State = {
 */
 
   
+
+  // Renders a molecule menu-item label, wrapping it in a thumbnail Tooltip only
+  // when the thumbnail image actually loads. The image is probed eagerly (rather
+  // than relying on the Tooltip's lazily-mounted title) so a missing thumbnail
+  // never flashes a broken tooltip on first hover.
+  function MoleculeLabel(props: { mol: [string, string, string] }) {
+    const { mol } = props;
+    const [thumbOk, setThumbOk] = React.useState(false);
+
+    React.useEffect(() => {
+      const url = mol[1];
+      if (!url) {
+        setThumbOk(false);
+        return;
+      }
+      let cancelled = false;
+      const img = new Image();
+      img.onload = () => { if (!cancelled) setThumbOk(true); };
+      img.onerror = () => { if (!cancelled) setThumbOk(false); };
+      img.src = url;
+      return () => { cancelled = true; };
+    }, [mol]);
+
+    const label = <span style={{ width: '100%' }}>{mol[0]}</span>;
+
+    if (!thumbOk)
+      return label;
+
+    return (
+      <Tooltip title={<img src={mol[1]} width="200px" alt="molecule"/>} placement="right-end" arrow>
+        {label}
+      </Tooltip>
+    );
+  }
 
   // WIP of Select managing tooltips ...
   //https://github.com/mui/material-ui/issues/9737
@@ -103,9 +138,7 @@ type State = {
                 
                   props.values[molCat].map( mol =>
                     <MenuItem key={mol[2]} value={mol[2]}>
-                    <Tooltip title={<img src={mol[1]} width="200px" alt="molecule"/>} placement="right-end" arrow> 
-                      <span style={{ width:'100%'}}>{mol[0]}</span>
-                    </Tooltip>
+                      <MoleculeLabel mol={mol} />
                   </MenuItem>
                   )
                   

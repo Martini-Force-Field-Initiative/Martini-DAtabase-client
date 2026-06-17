@@ -1,3 +1,4 @@
+import { debugLog } from '../../../../logger';
 import React from "react";
 import { Badge, Button } from "@material-ui/core";
 import Dialog from "@material-ui/core/Dialog";
@@ -39,10 +40,10 @@ export default function IdpSetter(props: IdpSetterProps) {
     completed: boolean,
   ) => {
     /*
-    console.log("IdpSetter::onFormChange");
-    console.log(content);
-    console.log(error);
-    console.log(completed);
+    debugLog("IdpSetter::onFormChange");
+    debugLog(content);
+    debugLog(error);
+    debugLog(completed);
     */
     setAlert(error);
   };
@@ -50,9 +51,9 @@ export default function IdpSetter(props: IdpSetterProps) {
     // Emit
 
     // Emit selection as native atom.resname, a
-    //console.log("Validating");
+    //debugLog("Validating");
     setRegionCount(content.length);
-    //console.log(content);
+    //debugLog(content);
     setOpen(false);
 
     const idpMartinizeSel: IdpMarinizeSel[] = content.map((idpRegion) => {
@@ -68,8 +69,8 @@ export default function IdpSetter(props: IdpSetterProps) {
       };
     });
     /*
-    console.log("IdpSetter:onValidate");
-    console.log(idpMartinizeSel);
+    debugLog("IdpSetter:onValidate");
+    debugLog(idpMartinizeSel);
     */
     idpRegionRef.current = content;
     props.onValidate(idpMartinizeSel);
@@ -80,13 +81,13 @@ export default function IdpSetter(props: IdpSetterProps) {
     [chain: string]: { [aaSymb: string]: number };
   } = {};
   /*
-  console.log("IdpSetter starting");
-  console.log(props.atoms);
+  debugLog("IdpSetter starting");
+  debugLog(props.atoms);
   */
   // Computing max string length and set index converter
   let longestExpr = 0;
   for (const [chain, resArr] of Object.entries(props.atoms)) {
-    //console.log(`${chain}: ${resArr}`);
+    //debugLog(`${chain}: ${resArr}`);
     uni2propAtoms[chain] = {};
     const _ = resArr.map((aaResNaNo, i) => {
       const aaSymb = aaResNaNo.join("");

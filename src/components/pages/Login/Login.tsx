@@ -1,3 +1,4 @@
+import { debugLog } from '../../../logger';
 import React from 'react';
 import Avatar from '@material-ui/core/Avatar';
 import Button from '@material-ui/core/Button';
@@ -87,7 +88,7 @@ export default function Login() {
       .then(({ user, token }: { user: User, token: string }) => {
         Settings.user = user;
         Settings.token = token;
-        //console.log( "hellog" , user)
+        //debugLog( "hellog" , user)
         window.location.pathname = "/";
       })
       .catch(e => {

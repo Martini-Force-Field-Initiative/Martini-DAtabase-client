@@ -1,3 +1,4 @@
+import { debugLog } from '../../logger';
 import React from "react";
 
 import Table from "@mui/material/Table";
@@ -24,7 +25,7 @@ import Settings from "../../Settings";
 import { ForceFieldMetadata } from "../../types/settings";
 
 export default function ForceField() {
-  console.log(Settings.martinize_variables.force_fields_info);
+  debugLog(Settings.martinize_variables.force_fields_info);
   const ff_data = Object.entries(Settings.martinize_variables.force_fields_info)
     .filter((x) => {
       const [_, ffInfo] = x;

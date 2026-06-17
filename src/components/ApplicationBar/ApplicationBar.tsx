@@ -34,15 +34,20 @@ import { toast } from "../Toaster";
 import { errorToText } from "../../helpers";
 import Box from "@mui/system/Box";
 import { WelcomeBar } from "./WelcomeBar";
+import { GIT_HASH } from "../../constants";
 //import { WarnBeta } from '../WarnBeta';
 
 const drawerWidth = 240;
 
 const logoBannerHeight = 80;
 
-// This line needs to be set to zero value if no banner is to be displayed
-// The WelcomeBar also needs to be commented out
-const headerHeight = 125;
+/* --- Important Information regarding Banner/Message Display ---
+  This headerHeight needs to be set to zero value if no banner is to be displayed
+  The WelcomeBar also needs to be commented out
+*/
+
+//const headerHeight = 125;
+const headerHeight = 0;
 
 const useStyles = makeStyles((theme: Theme) =>
   createStyles({
@@ -78,7 +83,7 @@ const useStyles = makeStyles((theme: Theme) =>
       backgroundColor: "whitesmoke",
       width: drawerWidth,
       borderRight: "none",
-      paddingTop: logoBannerHeight - 120,
+      paddingTop: logoBannerHeight + 40,
     },
     content: {
       flexGrow: 1,
@@ -371,36 +376,30 @@ export default function ApplicationDrawer(props: RouteComponentProps) {
       )}
 
       <DrawerElements {...props} />
+
+      <Typography
+        variant="caption"
+        style={{
+          display: "block",
+          textAlign: "center",
+          color: "#6b7480",
+          padding: "8px 0",
+        }}
+      >
+        build {GIT_HASH}
+      </Typography>
     </div>
   );
 
   return (
     <div className={classes.root}>
-      {/* App bar */}
-
-      {/*
-      <AppBar position="fixed" className={classes.appBar} elevation={0}>
-        <Toolbar>
-          <IconButton
-            style={{ color: "red" }}
-            color="inherit"
-            edge="start"
-            onClick={handleDrawerToggle}
-            className={classes.menuButton}
-          >
-
-          <MenuIcon />
-          </IconButton>
-          <AppBarContent />
-
-        </Toolbar>
-      </AppBar>
-      */}
+      {/* App bar with nested optional Welcome BAr for messages*/}
       <AppBar component="header" className={classes.appBar} elevation={0}>
-        <AppBarContent />
-        <WelcomeBar
+        <AppBarContent
           maxHeight={headerHeight}
-          onClose={() => setHasBanner(false)}
+          onWelcomeClose={() => {
+            setHasBanner(false);
+          }}
         />
       </AppBar>
 
@@ -448,7 +447,11 @@ export default function ApplicationDrawer(props: RouteComponentProps) {
   );
 }
 
-function AppBarContent() {
+interface ABProps {
+  onWelcomeClose: (b: boolean) => void;
+  maxHeight: number;
+}
+function AppBarContent(props: ABProps) {
   const [title, setTitle] = React.useState("MArtini Database");
 
   function onTitleChange(e: CustomEvent<string>) {
@@ -481,7 +484,12 @@ function AppBarContent() {
         alt="MAD LOGO"
         style={{ height: "110px", alignSelf: "center" }}
       />
-      {/* <WelcomeBar />*/}
+      {
+        <WelcomeBar
+          maxHeight={props.maxHeight}
+          onClose={() => props.onWelcomeClose(false)}
+        />
+      }
     </Box>
   );
 }

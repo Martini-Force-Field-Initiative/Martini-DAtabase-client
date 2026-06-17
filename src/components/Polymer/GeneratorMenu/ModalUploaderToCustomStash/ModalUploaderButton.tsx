@@ -1,3 +1,4 @@
+import { debugLog } from '../../../../logger';
 import React, { useState } from "react";
 import { styled } from '@mui/material/styles';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -33,7 +34,7 @@ const VisuallyHiddenInput = styled('input')({
           type="file"
           accept={ props.accept}
           onChange={(event) => { 
-            console.log(event.target.files);
+            debugLog(event.target.files);
             props.onUpload(event.target.files as FileList)
           }}
           multiple

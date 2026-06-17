@@ -1,3 +1,4 @@
+import { debugLog } from "../../logger";
 import React, { useEffect, useState } from "react";
 import { AppBar, Toolbar, Typography, Button } from "@material-ui/core";
 import { Link } from "react-router-dom";
@@ -42,7 +43,7 @@ const Tutorial = () => {
   }, []);
   //const theme = useTheme();
   const updateDisplaySection = (section: Sections) => {
-    console.log("==>" + section);
+    debugLog(`updateDisplaySection '${section}'`);
     setSection(section);
     window.history.replaceState(
       null,

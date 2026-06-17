@@ -1,0 +1,654 @@
+import { debugLog, debugDir } from "../../../logger";
+import {
+  SimulationNode,
+  SimulationLink,
+  SimulationGroup,
+  LayoutSpec,
+  linkLineSelector,
+  DynamicsParameters,
+  SimulationViewerRefreshOpts
+} from "../SimulationType";
+import { areNodesLinked } from "./utils";
+import * as d3 from "d3";
+type dragEvent = d3.D3DragEvent<any, SimulationNode, any>;
+
+//import { computeGridIndicesSVG } from "./Layout/Lattice";
+export type EdgeHighlightStyle = "alarm" | "corrected";
+//@ts-ignore
+import forceBoundary from "d3-force-boundary";
+import GraphicalNodeGenerator from "./GraphicalNodeGenerator";
+
+export class SimulationViewer {
+  svg: SVGSVGElement;
+  _nodeSize: number = 5;
+  height: number;
+  width: number;
+
+  groupsData: SimulationGroup[]= [];
+// Guess it is simpler to bind simulation Engine here
+  constructor(svg: SVGSVGElement) {
+    this.svg = svg;
+    this.height = svg.height.animVal.value;
+    this.width = svg.width.animVal.value;
+    GraphicalNodeGenerator.setDefinitionsSVG(svg);
+
+  }
+
+  set nodeSize(s: number) {
+    this._nodeSize = s;
+    // update SimulationEngine from outside then ^^
+     }
+  private ticked(){
+      d3.select(this.svg)
+        .selectAll(linkLineSelector)
+        .attr("x1", (d: any) => d.source.x)
+        .attr("y1", (d: any) => d.source.y)
+        .attr("x2", (d: any) => d.target.x)
+        .attr("y2", (d: any) => d.target.y);
+
+    d3.select(this.svg)
+        .selectAll<SVGGElement, SimulationNode>("g.nodes:not(.group_path)")
+        .attr("transform", function (d) {
+          return (
+            `translate(${d.x},${d.y})` +
+            ` scale(${this.getAttribute("zoom")})`
+          );
+      });
+  }
+
+  links(newLink: SimulationLink[]): void {
+    debugLog("SimulationViewer.links() inputs")
+    debugDir(newLink)
+    const link = d3
+      .select(this.svg)
+      .selectAll(linkLineSelector)
+      .data(newLink, (d: any) => d.source.id + "-" + d.target.id)
+      .enter();
+
+    link
+      .append("line")
+      .attr("class", "links")
+      .attr("stroke", "grey")
+      .attr("stroke-width", this.nodeSize / 20)
+      .attr("opacity", 0.5)
+      .attr("stroke-linecap", "round")
+      .attr("source", function (d: any) {
+        return d.source.id;
+      })
+      .attr("target", function (d: any) {
+        return d.target.id;
+      });
+  }
+
+  nodes(newnodes: SimulationNode[],
+    zoomValue: number,
+    simulationEngineCallback: (cmd: string, opt?: DynamicsParameters) => void,
+    simulationViewerCallback: (opt?:SimulationViewerRefreshOpts) => void,
+    contactCheckerCb: (n:SimulationNode)=> SimulationNode| undefined
+  ) {
+  debugLog("SimulaitonViewer:nodes(), new nodes input are:");
+  debugLog(newnodes);
+  if (newnodes.length === 0) return;
+  //debugLog(GraphicalNodeGenerator);
+  let tooltipElem: d3.Selection<HTMLDivElement, unknown, HTMLElement, any>;
+  // Define the div for the tooltip
+  if (document.getElementsByClassName("tooltip").length === 0) {
+    tooltipElem = d3.select("body").append("div").attr("class", "tooltip");
+  } else {
+    tooltipElem = d3.select("body").select("div.tooltip");
+  }
+
+  const self = this;
+  d3.select(this.svg)
+    .selectAll("g.nodes")
+    .data(newnodes, (d: any) => {
+      //@ts-ignore
+      return d.id;
+    })
+    .join(
+      (e) => GraphicalNodeGenerator.draw(e),
+      (update) => update,
+      (exit) => {
+        // B/C custom enter callback is defined we
+        // need to disable operation on exit
+      },
+    )
+    .attr("transform", `translate(${this.width / 4}, ${this.height / 4})`)
+    .attr("zoom", zoomValue)
+    .attr("id", function (d: SimulationNode) {
+      return d.id;
+    })
+    .call(
+      d3.drag<any, SimulationNode>().on("drag", dragged).on("end", dragended),
+    )
+    .on("mouseover", function (event: any, d: SimulationNode) {
+      tooltipElem.transition().duration(20).style("opacity", 1);
+
+      tooltipElem
+        .html(d.resname + " #" + d.id)
+        .style("left", event.clientX + "px")
+        .style("top", event.clientY + 20 + "px");
+    })
+    .on("mouseout", function (d) {
+      tooltipElem.transition().duration(500).style("opacity", 0);
+    })
+    .on("click", function (this: any, e: any, d: SimulationNode) {
+      if (e.ctrlKey) {
+        const _ = d3.select(this).attr("class");
+        d3.select(this).attr("class", `${_} onfocus`);
+      } else debugLog(d);
+    });
+
+  // Reafacor this mess ?
+
+
+    const clamp = (x: number, lo: number, hi: number) => {
+      return x < lo ? lo : x > hi ? hi : x;
+    };
+
+    function dragged(event: dragEvent, d: SimulationNode) {
+      if (event.sourceEvent.shiftKey) {
+        debugLog("Shift key is pressed/ skipping dragged!");
+        return;
+      }
+
+      //debugLog(d3.select(Mysvg).attr("height"), d3.select(Mysvg).attr("width"))
+      const heightSVG = d3.select(self.svg).attr("height");
+      const widthSVG = d3.select(self.svg).attr("width");
+      // secret trick
+
+      d.fx = clamp(event.x, 0, parseInt(widthSVG));
+      d.fy = clamp(event.y, 0, parseInt(heightSVG));
+      simulationEngineCallback('restart', {veolictyDecay:0.8, alpha:0.1})
+    //simulation.velocityDecay(0.8).alpha(0.1).restart();
+  }
+
+  function dragended(event: dragEvent, d: SimulationNode) {
+    if (event.sourceEvent.shiftKey) {
+      debugLog("Shift key is pressed skipping dragended!");
+      return;
+    }
+    // Comment below for sticky node
+    d.fx = null;
+    d.fy = null;
+
+    //Check contact when drag node
+    const nodeInContact = contactCheckerCb(d);
+    if (nodeInContact) {
+      //debugLog("closest", closest)
+      if (! areNodesLinked(d, nodeInContact)) {
+        const newlink = { source: d, target: nodeInContact };
+
+        if (d.links) d.links.push(nodeInContact);
+        else d.links = [nodeInContact];
+
+        if (nodeInContact.links) nodeInContact.links.push(d);
+        else nodeInContact.links = [d];
+
+        //debugLog("newlink", newlink)
+        d3.select(self.svg)
+          .selectAll(linkLineSelector)
+          .data([newlink], (d: any) => d.source.id + "-" + d.target.id)
+          .enter();
+
+        //addLinkToSVG([newlink]);
+        // ???
+        simulationViewerCallback({links:[newlink]}); // Thi is updateSVG
+      }
+    }
+    simulationEngineCallback('restart');
+   // simulation.restart();
+  }
+}
+
+  //ppbly change name
+  updatePolymerPath() {
+    debugLog("updatePolymerPath: CURRETNLY DISABLED (HULL off)");
+    return
+   //debugLog( "update polymer group path ", listOfGroups)
+    this.groupsData.forEach((group) => {
+      let coords: [number, number][] = [];
+      group.nodes!.map((d: SimulationNode) => coords.push([d.x!, d.y!]));
+      let hull = d3.polygonHull(coords);
+      d3.select(this.svg)
+        .selectAll("g.nodes.group_path")
+        .filter(function () {
+          return d3.select(this).attr("group") === group.id.toString(); // filter by single attribute
+        })
+        .data([hull])
+        .attr("d", (d) => "M" + d!.join("L") + "Z");
+    });
+  };
+
+
+  removeNodes(
+    nodesToRemove: SimulationNode[],
+    updateFunction: () => void,
+    decreaseIDFunction: () => void,
+  ) {
+    debugLog("remove : ", nodesToRemove.length, "nodes");
+
+    //remove link in object node
+    for (let nodeToRemove of nodesToRemove) {
+      debugLog(">>Current node to remove is:");
+      debugLog(nodeToRemove);
+      if (nodeToRemove.links !== undefined) {
+        for (let linkednode of nodeToRemove.links) {
+          //remove link between node and removed node
+          linkednode.links = linkednode.links!.filter(
+            (nodeToRM: SimulationNode) => nodeToRM.id !== nodeToRemove.id,
+          );
+        }
+      }
+
+      d3.select(this.svg)
+        .selectAll<SVGGElement, SimulationNode>("g.nodes:not(.group_path)")
+        .filter((d: SimulationNode) => {
+          debugLog("Looking for ");
+          debugLog(`${d.id} === ${nodeToRemove.id}`);
+          return d.id === nodeToRemove.id;
+        })
+        .remove();
+      //and then remove link inside svg
+      d3.select(this.svg)
+        .selectAll("line:not(.lattice)")
+        .filter(
+          (link: any) =>
+            link.source.id === nodeToRemove.id ||
+            link.target.id === nodeToRemove.id,
+        )
+        .remove();
+
+      //Update new ID to fit with polyply
+      d3.select(this.svg)
+        .selectAll<SVGGElement, SimulationNode>("g.nodes:not(.group_path)")
+        .filter((d: SimulationNode) => Number(d.id) > Number(nodeToRemove.id))
+        .each((d) => {
+          //Compute new ID
+          let newID: number = parseInt(d.id) - 1;
+          //d.index = newID
+          d.id = newID.toString();
+          d.index = newID;
+        });
+      //Check if minimun id !== de currentID
+      //Mettre une condition d'arret pour ne pas decrease
+      decreaseIDFunction();
+    }
+
+    updateFunction();
+  }
+
+  edgeHighlight(edges: [string, string][], type:EdgeHighlightStyle) {
+    d3.select(this.svg)
+      .selectAll<SVGElement, SimulationLink>("line")
+      .filter(
+        (d: SimulationLink) => {
+          for (let nodes of edges) {
+            if (
+              (d.source.id === nodes[0] && d.target.id === nodes[1]) ||
+              (d.target.id === nodes[0] && d.source.id === nodes[1])
+            ) return true;
+          }
+          return false;
+        }
+      )
+      .attr("stroke", type === "corrected" ? "#32CD32" : "red")
+      .attr("class", type === "alarm" ? "error" : "good")
+      .on("click", function (this: any, e: any, l: SimulationLink) {
+        debugLog("Lookup Edge", l);
+      });
+  }
+
+}
+
+// WIP easisest to resume on add_node_as_G and refactor from here
+/* One question is do we pass the SimulationEngine ?
+*/
+
+/*
+const incontact = (
+  c: SimulationNode,
+  simulation: d3.Simulation<SimulationNode, SimulationLink>,
+): SimulationNode | null => {
+  let closest: [number, SimulationNode | null] = [nodeSize / 2, null];
+  simulation.nodes().forEach((d: SimulationNode) => {
+    if (d.id === c.id) return;
+    const dist = Math.sqrt(
+      ((c.x ?? 0) - (d.x ?? 0)) * ((c.x ?? 0) - (d.x ?? 0)) +
+        ((c.y ?? 0) - (d.y ?? 0)) * ((c.y ?? 0) - (d.y ?? 0)),
+    );
+    if (dist < closest[0]) closest = [dist, d];
+  });
+  return closest[1];
+};
+
+*/
+
+export function reloadSimulation(
+  simulationEngine: simulationEngine,
+  groupsData: SimulationGroup[],
+  layout: LayoutSpec = "basic",
+) {
+  // debugLog("Reload simulation, with this number of nodes", simulation.nodes().length);
+  debugLog(`reloadSimulation ${simulationEngine.nodes.length} nodes`);
+
+  // Define ticked with coords
+
+
+    //Fait remonter les noeuds dans le svg pour les mettre au premier plan
+
+    d3.select(Mysvg).selectAll("g.nodes").raise();
+  };
+
+  // //DETECTION DE NOUVEAU LIENS ???????????????????????
+  const slinks: SimulationLink[] = [];
+  d3.select(Mysvg)
+    .selectAll(linkLineSelector)
+    .each((d: any) => slinks.push(d));
+
+  let simulationnodes: SimulationNode[] = [];
+  const group_node: SimulationNode[] = [];
+  d3.select(Mysvg)
+    .selectAll("g.nodes.group_path")
+    .each((d: any) => group_node.push(d));
+  d3.select(Mysvg)
+    .selectAll("g.nodes:not(.group_path)")
+    .each((d: any) => simulationnodes.push(d));
+
+  /* Layout computation / update? */
+  debugLog("reload_simulation:step2");
+  debugLog("incoming SimulationNodes");
+  debugLog(simulationnodes);
+  debugLog("prexisting SimulationNodes");
+  debugLog(simulation.nodes());
+  const allSimulationNodes = [/*...simulation.nodes(), */ ...simulationnodes];
+
+  const { positions, latticeLines, cols, rows, spacingX, spacingY } =
+    computeGridIndicesSVG(svg, allSimulationNodes);
+  console.error("reload_simulation:draw lattice");
+
+  debugLog("reload_simulation:computeGridIndicesSVG output");
+  debugDir(positions);
+  debugDir(cols);
+  debugDir(rows);
+
+  debugDir(latticeLines);
+  //d3.select(svg).selectAll(".lattice").remove();
+
+  d3.select(svg)
+    .append("g")
+    .attr("class", "grid")
+    .selectAll("line")
+    .data(latticeLines)
+    .join("line")
+    .attr("class", "lattice")
+    .attr("x1", (d) => d.x1)
+    .attr("y1", (d) => d.y1)
+    .attr("x2", (d) => d.x2)
+    .attr("y2", (d) => d.y2)
+    .attr("stroke", "#ccc")
+    .attr("stroke-width", 1);
+
+  // Define forcefield
+
+  // Trying with no link force
+  if (layout === "basic")
+    simulation
+      .force<d3.ForceLink<SimulationNode, SimulationLink>>("link")
+      ?.links(slinks);
+
+  if (layout === "lattice")
+    simulation
+      .force(
+        "x",
+        d3.forceX<SimulationNode>((d) => positions.get(d.id)!.x).strength(0.3),
+      )
+      .force(
+        "y",
+        d3.forceY<SimulationNode>((d) => positions.get(d.id)!.y).strength(0.3),
+      );
+
+  // Deploy forces
+  simulation.nodes(allSimulationNodes);
+  // Start simulation
+  simulation
+    .on("tick", ticked)
+    .alpha(0.1)
+    .alphaMin(0.005)
+    .velocityDecay(0.15)
+    .restart();
+}
+
+export function alarmBadLinks(id1: string, id2: string) {
+  debugLog("ALERT bad Link", id1, id2);
+  d3.select(Mysvg)
+    .selectAll<SVGElement, SimulationLink>("line")
+    .filter(
+      (d: SimulationLink) =>
+        (d.source.id === id1 && d.target.id === id2) ||
+        (d.source.id === id2 && d.target.id === id1),
+    )
+    .attr("class", "error")
+    .attr("stroke", "red")
+    .on("click", function (this: any, e: any, l: SimulationLink) {
+      debugLog("ERROR", l);
+    });
+}
+
+export function removeNodes(
+  nodesToRemove: SimulationNode[],
+  updateFunction: () => void,
+  decreaseIDFunction: () => void,
+) {
+  debugLog("remove : ", nodesToRemove.length, "nodes");
+
+  //remove link in object node
+  for (let nodeToRemove of nodesToRemove) {
+    debugLog(">>Current node to remove is:");
+    debugLog(nodeToRemove);
+    if (nodeToRemove.links !== undefined) {
+      for (let linkednode of nodeToRemove.links) {
+        //remove link between node and removed node
+        linkednode.links = linkednode.links!.filter(
+          (nodeToRM: SimulationNode) => nodeToRM.id !== nodeToRemove.id,
+        );
+      }
+    }
+
+    d3.select(Mysvg)
+      .selectAll<SVGGElement, SimulationNode>("g.nodes:not(.group_path)")
+      .filter((d: SimulationNode) => {
+        debugLog("Looking for ");
+        debugLog(`${d.id} === ${nodeToRemove.id}`);
+        return d.id === nodeToRemove.id;
+      })
+      .remove();
+    //and then remove link inside svg
+    d3.select(Mysvg)
+      .selectAll("line:not(.lattice)")
+      .filter(
+        (link: any) =>
+          link.source.id === nodeToRemove.id ||
+          link.target.id === nodeToRemove.id,
+      )
+      .remove();
+
+    //Update new ID to fit with polyply
+    d3.select(Mysvg)
+      .selectAll<SVGGElement, SimulationNode>("g.nodes:not(.group_path)")
+      .filter((d: SimulationNode) => Number(d.id) > Number(nodeToRemove.id))
+      .each((d) => {
+        //Compute new ID
+        let newID: number = parseInt(d.id) - 1;
+        //d.index = newID
+        d.id = newID.toString();
+        d.index = newID;
+      });
+    //Check if minimun id !== de currentID
+    //Mettre une condition d'arret pour ne pas decrease
+    decreaseIDFunction();
+  }
+
+  updateFunction();
+}
+export function addNodeToSVG_as_Gs(
+  newnodes: SimulationNode[],
+  simulation: any,
+  update: () => void,
+  zoomValue: number,
+) {
+  debugLog("addNodeToSVG_as_Gs, new nodes input are:");
+  debugLog(newnodes);
+  if (newnodes.length === 0) return;
+  //debugLog(GraphicalNodeGenerator);
+  let tooltipElem: d3.Selection<HTMLDivElement, unknown, HTMLElement, any>;
+  // Define the div for the tooltip
+  if (document.getElementsByClassName("tooltip").length === 0) {
+    tooltipElem = d3.select("body").append("div").attr("class", "tooltip");
+  } else {
+    tooltipElem = d3.select("body").select("div.tooltip");
+  }
+
+  d3.select(Mysvg)
+    .selectAll("g.nodes")
+    .data(newnodes, (d: any) => {
+      //@ts-ignore
+      return d.id;
+    })
+    .join(
+      (e) => GraphicalNodeGenerator.draw(e),
+      (update) => update,
+      (exit) => {
+        // B/C custom enter callback is defined we
+        // need to disable operation on exit
+      },
+    )
+    .attr("transform", `translate(${widthtSVG / 4}, ${heightSVG / 4})`)
+    .attr("zoom", zoomValue)
+    .attr("id", function (d: SimulationNode) {
+      return d.id;
+    })
+    .call(
+      d3.drag<any, SimulationNode>().on("drag", dragged).on("end", dragended),
+    )
+    .on("mouseover", function (event: any, d: SimulationNode) {
+      tooltipElem.transition().duration(20).style("opacity", 1);
+
+      tooltipElem
+        .html(d.resname + " #" + d.id)
+        .style("left", event.clientX + "px")
+        .style("top", event.clientY + 20 + "px");
+    })
+    .on("mouseout", function (d) {
+      tooltipElem.transition().duration(500).style("opacity", 0);
+    })
+    .on("click", function (this: any, e: any, d: SimulationNode) {
+      if (e.ctrlKey) {
+        const _ = d3.select(this).attr("class");
+        d3.select(this).attr("class", `${_} onfocus`);
+      } else debugLog(d);
+    });
+
+  // Reafacor this mess ?
+  type dragEvent = d3.D3DragEvent<any, SimulationNode, any>;
+
+  const clamp = (x: number, lo: number, hi: number) => {
+    return x < lo ? lo : x > hi ? hi : x;
+  };
+
+  function dragged(event: dragEvent, d: SimulationNode) {
+    if (event.sourceEvent.shiftKey) {
+      debugLog("Shift key is pressed/ skipping dragged!");
+      return;
+    }
+
+    //debugLog(d3.select(Mysvg).attr("height"), d3.select(Mysvg).attr("width"))
+    const heightSVG = d3.select(Mysvg).attr("height");
+    const widthSVG = d3.select(Mysvg).attr("width");
+    // secret trick
+
+    d.fx = clamp(event.x, 0, parseInt(widthSVG));
+    d.fy = clamp(event.y, 0, parseInt(heightSVG));
+
+    simulation.velocityDecay(0.8).alpha(0.1).restart();
+  }
+
+  function dragended(event: dragEvent, d: SimulationNode) {
+    if (event.sourceEvent.shiftKey) {
+      debugLog("Shift key is pressed skipping dragended!");
+      return;
+    }
+    // Comment below for sticky node
+    d.fx = null;
+    d.fy = null;
+
+    //Check contact when drag node
+    const closest = incontact(d, simulation);
+    if (closest) {
+      //debugLog("closest", closest)
+      if (checkLink(d, closest)) {
+        const newlink = { source: d, target: closest };
+
+        if (d.links) d.links.push(closest);
+        else d.links = [closest];
+
+        if (closest.links) closest.links.push(d);
+        else closest.links = [d];
+
+        //debugLog("newlink", newlink)
+        d3.select(Mysvg)
+          .selectAll(linkLineSelector)
+          .data([newlink], (d: any) => d.source.id + "-" + d.target.id)
+          .enter();
+        addLinkToSVG([newlink]);
+        update();
+      }
+    }
+    simulation.restart();
+  }
+}
+
+export function checkLink(node1: SimulationNode, node2: SimulationNode) {
+  if (node1.links === undefined || node2.links === undefined) return true;
+  for (let n of node1.links) {
+    if (n === node2) return false;
+  }
+  for (let n of node2.links) {
+    if (n === node1) return false;
+  }
+  return true;
+}
+
+export function linkcorrected(idnode1: string, idnode2: string) {
+  //Turn the link color in green
+  d3.select(Mysvg)
+    .selectAll<SVGElement, SimulationLink>(linkLineSelector)
+    .filter(
+      (d: SimulationLink) =>
+        (d.source.id === idnode1 && d.target.id === idnode2) ||
+        (d.target.id === idnode1 && d.source.id === idnode2),
+    )
+    .attr("stroke", "#32CD32");
+}
+
+export function addLinkToSVG(newLink: SimulationLink[]): void {
+  const link = d3
+    .select(Mysvg)
+    .selectAll(linkLineSelector)
+    .data(newLink, (d: any) => d.source.id + "-" + d.target.id)
+    .enter();
+
+  link
+    .append("line")
+    .attr("class", "links")
+    .attr("stroke", "grey")
+    .attr("stroke-width", nodeSize / 20)
+    .attr("opacity", 0.5)
+    .attr("stroke-linecap", "round")
+    .attr("source", function (d: any) {
+      return d.source.id;
+    })
+    .attr("target", function (d: any) {
+      return d.target.id;
+    });
+}

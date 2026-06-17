@@ -1,3 +1,4 @@
+import { debugDir, debugLog } from '../../../logger';
 import React from "react";
 import {
   Box,
@@ -278,6 +279,26 @@ export class ModalMoleculeSelector extends React.Component<
 > {
   timeout: NodeJS.Timeout | undefined;
   all_molecules: Molecule[] = [];
+  // Infinite-scroll plumbing (see attachSentinel): the scrollable dialog body
+  // is the observer root; the observer watches a bottom sentinel.
+  dialogContentRef = React.createRef<HTMLDivElement>();
+  sentinelObserver: IntersectionObserver | null = null;
+  // Number of records consumed from the backend's paged ordering. Tracked
+  // separately from all_molecules.length because we dedupe (see addUnique): the
+  // skip offset must reflect what the backend returned, not what we kept.
+  fetchedCount = 0;
+
+  // Append molecules not already present by id. Backend pagination can return
+  // the same molecule across pages; without deduping, React warns about
+  // duplicate keys (key={m.id}) in the rendered list.
+  addUnique = (molecules: Molecule[]) => {
+    const seen = new Set(this.all_molecules.map((m) => m.id));
+    for (const m of molecules) {
+      if (seen.has(m.id)) continue;
+      seen.add(m.id);
+      this.all_molecules.push(m);
+    }
+  };
 
   state: ModalState = {
     search: "",
@@ -306,6 +327,7 @@ export class ModalMoleculeSelector extends React.Component<
       }, 350);
     } else {
       this.all_molecules = [];
+      this.fetchedCount = 0;
       this.setState({
         content: "",
         displayed_molecules: [],
@@ -316,13 +338,43 @@ export class ModalMoleculeSelector extends React.Component<
     }
   };
 
-  onLoadMore = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    e.preventDefault();
-    this.enlargeSearch();
+  componentWillUnmount() {
+    if (this.timeout) clearTimeout(this.timeout);
+    this.sentinelObserver?.disconnect();
+  }
+
+  // Infinite scroll: a sentinel rendered at the bottom of the list triggers the
+  // next page when it scrolls into the DialogContent viewport. Using a callback
+  // ref lets us (dis)connect the observer exactly as the sentinel mounts (it
+  // only exists while load_more is true).
+  attachSentinel = (node: HTMLDivElement | null) => {
+    this.sentinelObserver?.disconnect();
+    this.sentinelObserver = null;
+    if (!node) return;
+
+    this.sentinelObserver = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0].isIntersecting &&
+          this.state.load_more &&
+          !this.state.loading
+        ) {
+          this.enlargeSearch();
+        }
+      },
+      // root = the scrollable dialog body; preload a bit before the bottom.
+      { root: this.dialogContentRef.current, rootMargin: "200px" },
+    );
+    this.sentinelObserver.observe(node);
   };
+
+  // Auto-load pages up front, but cap the initial fetch. Beyond this, scrolling
+  // to the bottom auto-loads more (see attachSentinel).
+  static readonly INITIAL_CAP = 50;
 
   async startSearch(content: string) {
     this.all_molecules = [];
+    this.fetchedCount = 0;
     this.setState({
       loading: true,
       load_more: false,
@@ -331,20 +383,50 @@ export class ModalMoleculeSelector extends React.Component<
     });
 
     try {
-      let { molecules, length }: { molecules: Molecule[]; length: number } =
-        await ApiHelper.request("molecule/list", {
-          parameters: { q: content, combine: "false", limit: 10 },
-        });
-      this.all_molecules = molecules;
-      let filtered_molecules: Molecule[] = [];
+      const PAGE = 10;
+      let length = Infinity;
+
+      // Fetch every page up front until the backend is exhausted or we hit the
+      // cap on unique molecules.
+      while (
+        this.fetchedCount < length &&
+        this.all_molecules.length < ModalMoleculeSelector.INITIAL_CAP
+      ) {
+        const {
+          molecules,
+          length: total,
+        }: { molecules: Molecule[]; length: number } = await ApiHelper.request(
+          "molecule/list",
+          {
+            parameters: {
+              q: content,
+              combine: "false",
+              limit: PAGE,
+              skip: this.fetchedCount,
+            },
+          },
+        );
+
+        length = total;
+        // Advance the backend offset by what was returned (incl. any dupes),
+        // but only keep molecules we haven't seen yet.
+        this.fetchedCount += molecules.length;
+        this.addUnique(molecules);
+
+        // Guard against a stale/short page that would never reach `length`.
+        if (molecules.length === 0) break;
+      }
+
       console.warn("startSearch:all_molecules");
-      console.dir(this.all_molecules);
+      debugDir(this.all_molecules);
+
+      let filtered_molecules: Molecule[] = [];
       if (this.props.moleculeFilter) {
         filtered_molecules = this.all_molecules.filter(
           this.props.moleculeFilter,
         );
         console.warn("startSearch:Molecules filtred");
-        console.dir(filtered_molecules);
+        debugDir(filtered_molecules);
       }
 
       if (this.state.loading)
@@ -352,7 +434,7 @@ export class ModalMoleculeSelector extends React.Component<
           displayed_molecules: this.props.moleculeFilter
             ? filtered_molecules
             : this.all_molecules,
-          load_more: this.all_molecules.length < length,
+          load_more: this.fetchedCount < length,
           content,
         });
     } catch (e) {
@@ -384,32 +466,28 @@ export class ModalMoleculeSelector extends React.Component<
             q: content,
             combine: "false",
             limit: 10,
-            skip: this.all_molecules.length,
+            skip: this.fetchedCount,
           },
         });
 
-      /*
-      const all_new_molecules = deduped([
-        ...this.state.molecules,
-        ...molecules,
-      ]); // can happen when fitlering
-      */
-      this.all_molecules = [...this.all_molecules, ...molecules];
+      // Advance the backend offset by what was returned, dedupe into the list.
+      this.fetchedCount += molecules.length;
+      this.addUnique(molecules);
       console.warn("enlargeSearch:all_molecules");
-      console.dir(this.all_molecules);
+      debugDir(this.all_molecules);
       let filtered_molecules: Molecule[] = [];
       if (this.props.moleculeFilter) {
         filtered_molecules = this.all_molecules.filter(
           this.props.moleculeFilter,
         );
         console.warn("enlargeSearch:Molecules filtred");
-        console.dir(filtered_molecules);
+        debugDir(filtered_molecules);
       }
       this.setState({
         displayed_molecules: this.props.moleculeFilter
           ? filtered_molecules
           : this.all_molecules,
-        load_more: this.all_molecules.length < length,
+        load_more: this.fetchedCount < length,
       });
     } catch (e) {
       toast("Error while loading molecules.", "error");
@@ -426,7 +504,7 @@ export class ModalMoleculeSelector extends React.Component<
   }
 
   render() {
-    /*   console.log(
+    /*   debugLog(
       `ModalMoleculeSelector:: rendering w/ ff ${this.props.ff} ${this.props.ffLibs}`,
     );
 */
@@ -445,7 +523,7 @@ export class ModalMoleculeSelector extends React.Component<
           molecule
         </DialogTitle>
 
-        <DialogContent>
+        <DialogContent ref={this.dialogContentRef}>
           <div>
             <TextField
               value={this.state.search}
@@ -488,17 +566,12 @@ export class ModalMoleculeSelector extends React.Component<
             </List>
           )}
 
+          {/* Infinite-scroll sentinel: when it enters view the next page loads.
+              While loading, load_more is false so the sentinel unmounts (the
+              observer detaches) and the spinner below shows; once the page
+              arrives it remounts and, if still in view, chains the next load. */}
           {this.state.load_more && (
-            <div>
-              <DialogContentText
-                align="center"
-                color="primary"
-                style={{ cursor: "pointer" }}
-                onClick={this.onLoadMore}
-              >
-                Load more
-              </DialogContentText>
-            </div>
+            <div ref={this.attachSentinel} style={{ height: 1 }} />
           )}
 
           {this.state.loading && (

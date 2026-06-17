@@ -7,6 +7,7 @@ import {
   Select,
   MenuItem,
   Link,
+  Typography,
 } from "@material-ui/core";
 import { Alert } from "@material-ui/lab";
 import clsx from "clsx";
@@ -17,23 +18,51 @@ import { WidthFull } from "@mui/icons-material";
 import { PregnantWoman } from "@material-ui/icons";
 
 export const CenterComponent = (props: any) => {
+  const { style, children, ...rest } = props;
   return (
     <Grid
       container
       direction="column"
-      style={{ justifyContent: "center" }}
-      {...props}
+      {...rest}
       alignItems="center"
+      // Merge (don't let a caller's `style`, e.g. height:100vh from LoginWaiter,
+      // clobber the centering — that broke vertical centering).
+      style={{ justifyContent: "center", ...style }}
     >
-      {props.children}
+      {children}
     </Grid>
   );
 };
 
 export const BigPreloader: React.FC<any> = (props: any) => {
+  // Optional message rendered in the centre of the spinner. Defaults to the
+  // login-wait context this preloader is mostly used in. `size` is overridable.
+  const { label = "Login …", size = 160, ...rest } = props;
   return (
-    <CenterComponent {...props}>
-      <CircularProgress size={70} thickness={2} />
+    <CenterComponent {...rest}>
+      <div style={{ position: "relative", display: "inline-flex" }}>
+        <CircularProgress size={size} thickness={2} />
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Typography
+            variant="body2"
+            color="primary"
+            style={{ textAlign: "center", padding: "0 0.25rem" }}
+          >
+            {label}
+          </Typography>
+        </div>
+      </div>
     </CenterComponent>
   );
 };

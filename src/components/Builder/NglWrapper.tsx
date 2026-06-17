@@ -1,3 +1,4 @@
+import { debugLog } from '../../logger';
 import * as ngl from "@mmsb/ngl";
 import {
   StageParameters,
@@ -167,7 +168,7 @@ export class NglComponent {
           schemeParameters.beads,
         );
       }
-      //console.log(params )
+      //debugLog(params )
       repr.setParameters(params);
     }
 
@@ -238,7 +239,7 @@ export class NglRepresentation<T extends Representation> {
     this.iterateOverSelection(
       "(*) and .CA",
       (a) => {
-        //  console.log(a.chainname, a.resname, a.resno);
+        //  debugLog(a.chainname, a.resname, a.resno);
         const _ = a.chainname in res ? res[a.chainname] : [];
         _.push([a.resname, a.resno.toString()]);
         res[a.chainname] = _;

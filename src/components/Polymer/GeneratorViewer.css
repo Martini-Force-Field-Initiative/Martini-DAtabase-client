@@ -1,29 +1,87 @@
+div#svg-host {
+    /* Positioning context for the absolutely-placed overlays (GridButton,
+       Legend) so they anchor to the svg host, not the viewport. Must be a
+       bare keyword: "fixed" (quoted) is invalid CSS and was being ignored. */
+    position: relative;
+}
+
 g.onfocus > circle {
-    stroke : rgb(88, 24, 88);
+    stroke: rgb(88, 24, 88);
     stroke-width: 3px;
 }
 
-g.onfocus > path {
-    stroke : rgb(88, 24, 88);
+g.onfocus:not(.anchored) > path {
+    stroke: rgb(88, 24, 88);
     stroke-width: 3px;
+}
+
+g.anchored:not(.onfocus) > path {
+    stroke: black;
+    stroke-width: 6px;
+}
+
+g.anchored.onfocus > path {
+    stroke: rgb(88, 24, 88);
+    stroke-width: 6px;
 }
 
 div.tooltip {
-    position: fixed;			
-    text-align: center;			
-    width: auto;					
-    height: auto;					
-    padding: 2px;				
-    font: 12px sans-serif;		
+    position: fixed;
+    text-align: center;
+    width: auto;
+    height: auto;
+    padding: 2px;
+    font: 12px sans-serif;
     background: rgb(236, 244, 255);
     /*background-color:'black';*/
-    color:black;
-    border: 0px;		
-    border-radius: 8px;			
-    pointer-events: none;			
+    color: black;
+    border: 0px;
+    border-radius: 8px;
+    pointer-events: none;
 }
 
-.highlight {
-    stroke-width: 8px;
-    stroke:red;
+@keyframes node-flash {
+    0%,
+    100% {
+        filter: drop-shadow(0 0 0px firebrick);
+    }
+    50% {
+        filter: drop-shadow(0 0 24px firebrick);
+    }
+}
+
+g.nodes {
+    cursor: context-menu;
+}
+
+g.nodes.flash > path {
+    animation: node-flash 1s ease-in-out 8 alternate;
+}
+
+g.background circle {
+    r: 1;
+    color: slategray;
+}
+
+g.lines line.concrete {
+    stroke: gray;
+    stroke-width: 3px;
+}
+
+g.lines.error .concrete {
+    stroke: red;
+}
+g.lines.corrected .concrete {
+    stroke: green;
+}
+/* The cursor must sit on the leaf hit target — the transparent `.ghost` line
+   (the visible `.concrete` has pointer-events:none) — because an SVG <line>
+   does not reliably inherit `cursor` from its parent <g>. `g.lines.error .ghost`
+   (0,3,2) outranks `g.lines .ghost` (0,2,2), so error edges win. */
+g.lines .ghost {
+    stroke: transparent;
+    cursor: crosshair;
+}
+g.lines:is(.error, .corrected) .ghost {
+    cursor: context-menu;
 }

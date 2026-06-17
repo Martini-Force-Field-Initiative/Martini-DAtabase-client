@@ -1,9 +1,10 @@
+import { debugLog } from "./logger";
 import { Molecule } from "./types/entities";
 
 const REGEXP_MARTINI_VERSION = /martini([\d\.]+)/;
 
 const versionsCompare = (ff1: string, ff2: string) => {
-  console.log("==>", ff1, ff2);
+  //debugLog("versionsCompare:", ff1, ff2);
   if (ff1.startsWith("martini3") && ff2.startsWith("martini2")) return ff1;
   if (ff2.startsWith("martini3") && ff1.startsWith("martini2")) return ff2;
 
@@ -28,16 +29,16 @@ export const forceFieldSearchPriorityRule = (
     else _.push(x);
   });
   /*
-  console.log("forceFieldSearchPriorityRule:reducing this");
-  console.log(_);
+  debugLog("forceFieldSearchPriorityRule:reducing this");
+  debugLog(_);
   */
   const prio = _.filter((v) => v !== undefined).reduce(
     (prev, curr) => versionsCompare(prev, curr),
     _[0],
   );
   /*
-  console.log("==>");
-  console.log(prio);
+  debugLog("==>");
+  debugLog(prio);
   */
   return prio;
 };
@@ -54,7 +55,7 @@ export const forceFieldVersionMatcher = (
 
   /*-----*/
 
-  console.log(x, y, type);
+  debugLog(x, y, type);
   if (x === y) return true;
 
   const m1 = x.match(REGEXP_MARTINI_VERSION);

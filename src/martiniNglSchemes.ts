@@ -1,3 +1,4 @@
+import { debugLog } from './logger';
 import * as ngl from "@mmsb/ngl";
 import { AvailableForceFields } from "./types/entities";
 import { Bead } from "./components/Builder/BeadsHelper";
@@ -114,7 +115,7 @@ export function getBeadsLegend(ff: AvailableForceFields) {
             for( const beadName of Object.keys(beadsAa)){
                 const beadType = beadName.match(beadRegex)?.groups?.general_type
                 const beadSize = beadName.match(beadRegex)?.groups?.size ?? "R"
-                console.log(beadType, beadSize)
+                debugLog(beadType, beadSize)
 
                 if (beadType){
                     if (!(beadType in res)) res[beadType] = {}

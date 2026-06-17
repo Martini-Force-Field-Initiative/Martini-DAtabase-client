@@ -1,3 +1,4 @@
+import { debugLog } from '../../../../logger';
 import React, { useState } from "react";
 import { Stack, Typography } from '@mui/material';
 import TextField from '@material-ui/core/TextField';
@@ -24,7 +25,7 @@ export default function FastaBodyForm(props:BodyProps){
         const [title, content] = await fastaParser(e);
         setFastaSequence(content);
         setFastaTitle(title);
-        console.log(`setting title ${title} and content ${content}`);
+        debugLog(`setting title ${title} and content ${content}`);
         props.onTitleChange(title);
         props.onContentChange(content);
         //bodyUpload(title, content);
@@ -32,7 +33,7 @@ export default function FastaBodyForm(props:BodyProps){
         console.error("fasta upload error");
         props.onUploadError(e as string);
       }
-      console.log("fasta format finished");
+      debugLog("fasta format finished");
       
     }
     

@@ -1,3 +1,4 @@
+import { debugLog } from '../../../logger';
 import TextField from "@mui/material/TextField";
 import InputAdornment from "@mui/material/InputAdornment";
 import IconButton from "@mui/material/IconButton";
@@ -26,7 +27,7 @@ interface NumberSelectProps {
     step={0.1}
     default={0.0}
     width={"8.5em"}
-    onChange={(x) => console.log("kikoi " + x)}
+    onChange={(x) => debugLog("kikoi " + x)}
   />
 
 */
@@ -70,7 +71,7 @@ export function NumberSelect(props: NumberSelectProps) {
         if (!props.adorned) {
           const _ = validator(e.target.value, 10);
           setValue(_ || props.default);
-          //console.log(e.target.value);
+          //debugLog(e.target.value);
           props.onChange(_);
         }
         //setValue(validator(e.target.value, 10) || props.default);

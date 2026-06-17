@@ -1,3 +1,4 @@
+import { debugDir, debugLog } from '../../../logger';
 import * as React from 'react';
 import { Box, Button, FormControl, Select, InputLabel, MenuItem } from '@material-ui/core';
 import SendIcon from '@mui/icons-material/Send';
@@ -35,8 +36,8 @@ export default function LinkCreator(props:LKProps) {
                     style={{minWidth:'8em'}}
                     value={state.id1}
                     onChange={ (e) => {
-                        console.log('id1 change');
-                        console.dir(e);
+                        debugLog('id1 change');
+                        debugDir(e);
                         setState({...state, id1:e.target.value as string})
                         setIsValid( state.id2 !== '')
                     }}
@@ -50,12 +51,12 @@ export default function LinkCreator(props:LKProps) {
                             onMouseEnter={
                                 (e)=> { 
                                     props.onSelectItemEnter(srcSelStr, true)
-                                    console.log("I am In")}
+                                    debugLog("I am In")}
                             }
                             onMouseLeave={
                                 (e)=> { 
                                     props.onSelectItemLeave(srcSelStr, false)
-                                    console.log("I am out")}
+                                    debugLog("I am out")}
                             }
                             onClick={
                                 ()=>props.onSrcSelect(srcSelStr)
@@ -74,8 +75,8 @@ export default function LinkCreator(props:LKProps) {
                     style={{minWidth:'8em'}}
                     value={state.id2}
                     onChange={ (e) => {
-                        console.log('id2 change');
-                        console.dir(e);
+                        debugLog('id2 change');
+                        debugDir(e);
                         setState({...state, id2:e.target.value as string})
                         setIsValid( state.id1 !== '')
                     }}
@@ -89,12 +90,12 @@ export default function LinkCreator(props:LKProps) {
                             onMouseEnter={
                                 (e)=> { 
                                     props.onSelectItemEnter(tgtSelStr, true)
-                                    console.log("I am In")}
+                                    debugLog("I am In")}
                             }
                             onMouseLeave={
                                 (e)=> { 
                                     props.onSelectItemLeave(tgtSelStr, false)
-                                    console.log("I am out")}
+                                    debugLog("I am out")}
                             }
                             onClick={
                                 ()=>props.onSrcSelect(tgtSelStr)

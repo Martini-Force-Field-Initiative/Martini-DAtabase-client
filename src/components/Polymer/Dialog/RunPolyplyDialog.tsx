@@ -1,3 +1,4 @@
+import { debugLog } from '../../../logger';
 import * as React from "react";
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
@@ -191,8 +192,8 @@ export default class RunPolyplyDialog extends React.Component<props, state> {
   renderResultViewer = () => {
     const { itps, gro, pdb, top, json } = this.props.getResultFilesContent();
     /*
-    console.log("PDB to view");
-    console.log(pdb);
+    debugLog("PDB to view");
+    debugLog(pdb);
     */
     return (
       <ResultViewer

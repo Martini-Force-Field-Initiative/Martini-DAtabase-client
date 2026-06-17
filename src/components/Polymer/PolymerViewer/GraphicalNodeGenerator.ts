@@ -1,3 +1,4 @@
+import { debugDir, debugLog } from "../../../logger";
 import * as d3 from "d3";
 import { SimulationNode } from "../SimulationType";
 import { getRandomInt } from "../../../helpers";
@@ -16,8 +17,9 @@ class GraphicalNodeGenerator {
     "#2980b9",
     "#9b59b6",
     "#8e44ad",
-    "#34495e",
-    "#2c3e50",
+    // Commenting out as too dark to display blacktext
+    //"#34495e",
+    //"#2c3e50",
     "#f1c40f",
     "#f39c12",
     "#e67e22",
@@ -157,10 +159,16 @@ class GraphicalNodeGenerator {
       if (i == 1) return p + c.toLowerCase();
       return p;
     }, "");
-    //console.log("Generating custom node label " + label);
+    //debugLog("Generating custom node label " + label);
 
     return label;
   }
+
+  public updateColor(color: string, resnames: string[]) {
+    debugDir(this.colorsInUse);
+    resnames.forEach((resname) => (this.colorsInUse[resname] = color));
+  }
+
   private getColor(d: SimulationNode) {
     if (GraphicalNodeGenerator.hydrophobic.includes(d.resname))
       return "url(#hydrophobic-gradient)";
@@ -179,15 +187,15 @@ class GraphicalNodeGenerator {
     // ADD CATEGORY PROPERTY TO NODE DATA to guess shape <<
     const nodeSize = 1000;
     //console.warn("GraphicalNodeGenerator inputs:")
-    //console.log(gEnterSel)
+    //debugLog(gEnterSel)
     if (!gEnterSel) return;
 
     let gs = gEnterSel.append("g").attr("class", "nodes");
 
     gs.append("path")
       .attr("d", function (d: SimulationNode) {
-        //console.log("Generating path for ", d);
-        //console.log("Generating path for composite? ", d.is_composite);
+        //debugLog("Generating path for ", d);
+        //debugLog("Generating path for composite? ", d.is_composite);
         const p =
           d.is_composite || d?.category === "miscellaneous"
             ? generateBlurShape(nodeSize / 4)
@@ -195,7 +203,7 @@ class GraphicalNodeGenerator {
                 .symbol()
                 .type(GraphicalNodeGenerator.get_d3shape(d))
                 .size(nodeSize)();
-        //console.log(p)
+        //debugLog(p)
         return p;
       })
       // .attr('r', 15)
@@ -220,7 +228,7 @@ class GraphicalNodeGenerator {
       (c) => !inUseColrs.includes(c),
     );
 
-    if (availableColors.length == 0) {
+    if (availableColors.length === 0) {
       // Color are exhausted just pull random in base palette
       availableColors = GraphicalNodeGenerator.basePalette;
     }

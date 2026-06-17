@@ -1,3 +1,4 @@
+import { debugLog } from "../../../../logger";
 import { ItpFile } from "itp_mad_parser";
 import ItpMadWrapper from "itp_mad_parser_ext";
 import { ItpAtomRecord } from "itp_mad_parser_ext";
@@ -6,7 +7,7 @@ export const equalItpAtomRecords = (
   x: ItpAtomRecord,
   y: ItpAtomRecord,
 ): boolean => {
-  return (
+  const _ =
     x.num === y.num &&
     x.resnum === y.resnum &&
     x.resname === y.resname &&
@@ -14,8 +15,32 @@ export const equalItpAtomRecords = (
     x.name === y.name &&
     x.cgnr === y.cgnr &&
     x.charge === y.charge &&
-    x.mass === y.mass
-  );
+    x.mass === y.mass;
+
+  if (!_) {
+    debugLog(`equalItpAtomRecords:: OUPS`);
+    debugLog(x);
+    debugLog(y);
+    if (x.num !== y.num)
+      [
+        "num",
+        "resnum",
+        "resname",
+        "segid",
+        "name",
+        "cgnr",
+        "charge",
+        "mass",
+      ].forEach((field) => {
+        const vx = x[field as keyof ItpAtomRecord];
+        const vy = y[field as keyof ItpAtomRecord];
+        if (vx !== vy)
+          debugLog(
+            `equalItpAtomRecords:: ${field} missmatch '${vx}' != '${vy}'`,
+          );
+      });
+  }
+  return _;
 };
 
 export const stringifyAtomRecord = (x: ItpAtomRecord) => {
@@ -43,16 +68,16 @@ export const cloneAtomRecord = (
 
 export const tweakBead = (itp: ItpFile, nrec: ItpAtomRecord[]): void => {
   /*
-  console.log("tweakBead:input::itp");
-  console.log(itp.toString());
-  console.log("tweakBead:input::nrec");
-  console.log(nrec);
+  debugLog("tweakBead:input::itp");
+  debugLog(itp.toString());
+  debugLog("tweakBead:input::nrec");
+  debugLog(nrec);
 */
   const _ = ItpMadWrapper.wrap(itp);
   _.atomApply(nrec);
 
-  console.log("tweakBead:output::itp");
-  console.log(itp.toString());
+  debugLog("tweakBead:output::itp");
+  debugLog(itp.toString());
 };
 
 export const beadslist = [

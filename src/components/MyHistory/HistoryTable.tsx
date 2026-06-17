@@ -1,3 +1,4 @@
+import { debugLog } from '../../logger';
 import React from 'react'; 
 import { TableContainer, Table, TableHead, TableRow, TableCell, TableBody, Link, Collapse, IconButton, Box, TablePagination, Checkbox, TableSortLabel, makeStyles } from '@material-ui/core'
 import { visuallyHidden } from '@mui/utils'
@@ -260,7 +261,7 @@ export default function HistoryTable(props : {
     const downloadJob = async (jobId: string) => {
         try {
             const job : ReadedJobDoc = await ApiHelper.request(`history/get?jobId=${jobId}`)
-            //console.log("job", job)
+            //debugLog("job", job)
             const martinizeFiles = await loadMartinizeFiles(job)
             const zip = new JSZip()
             zip.file(martinizeFiles.pdb.name, martinizeFiles.pdb.content)

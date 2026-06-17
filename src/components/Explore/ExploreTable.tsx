@@ -1,3 +1,4 @@
+import { debugLog } from '../../logger';
 import React from 'react';
 import { makeStyles, Paper, TableContainer, Table, TableHead, TableRow, TableCell, TableBody, TableFooter, CircularProgress, createStyles, IconButton, TablePagination } from '@material-ui/core';
 import clsx from 'clsx';
@@ -165,7 +166,7 @@ export default function MoleculeTable(props: {
                         control={<Checkbox size="small" //icon={<CheckBoxOutlineBlank />} checkedIcon={<Checkbox />} 
                         name="checkedH" onClick={() => {
                           addMoleculesToDownload(row, molToDownload)
-                          console.log(molToDownload)
+                          debugLog(molToDownload)
                       }}/>}
                         label=''
                       />

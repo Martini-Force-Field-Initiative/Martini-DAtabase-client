@@ -1,3 +1,4 @@
+import { debugDir, debugLog } from "../../../logger";
 import * as React from "react";
 
 import { NodeInjectSpec } from "../SimulationType";
@@ -34,13 +35,15 @@ import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import UploaderSwitch from "./UploaderSwitch";
 import PolyplyDisclaimer from "./PolyplyDisclaimer";
+import PolyplyFinalStep from "./PolyplyFinalStep";
 import MailerSwitch from "./MailerSwitch";
 import ModalBackToDb from "./ModalBackToDb";
 import ModalUploadToCustomStash from "./ModalUploaderToCustomStash";
 import HomeIcon from "@mui/icons-material/Home";
 import RepeatOnIcon from "@mui/icons-material/RepeatOn";
-import { LinearProgress, Stack } from "@mui/material";
-
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import { IconButton, LinearProgress, Stack, Tooltip } from "@mui/material";
+import GitHubChip from "../../SharedComponents/DependencyChips";
 import { withStyles } from "@material-ui/core/styles";
 import GeneratorControls from "./GeneratorControls";
 import BottomControls from "./BottomControls";
@@ -71,7 +74,7 @@ interface GeneratorMenuProps {
   // addnodeFromJson: (jsondata: JSON) => void;
   addnode: (arg0: NodeInjectSpec) => void;
   addlink: (arg1: any, arg2: any) => void;
-
+  onHighlightTargets: (resname: string) => void;
   //addprotsequence: (arg0: string) => void;
   //addmoleculecoord: (arg0: string) => void;
   //addCustomitp: (arg0: string, arg1: string) => void;
@@ -91,6 +94,16 @@ interface GeneratorMenuProps {
   onPolymerFileUpload: (f: FileList) => void;
   onPolymerFormUpload: (title: string, content: string, format: string) => void;
   documentation: MetadataCollection;
+  // Begin a width-resize drag from the resize handle.
+  // The parent owns the width and handles the move/end of the drag via
+  // pointer capture on the handle element.
+  onResizeStart?: (e: React.PointerEvent) => void;
+  // Current width (px) of the resizable menu panel, used to keep the bottom
+  // controls centered on the SVG viewer rather than on the menu.
+  menuWidth?: number;
+  // Polymer generated (final step): replace the editable menu (below the
+  // MAD HOME / RESET EDITOR bar + divider) with the thank-you alert.
+  finalStep?: boolean;
 }
 
 interface GeneratorMenuState extends NodeInjectSpec {
@@ -148,7 +161,7 @@ class GeneratorMenu extends React.Component<
   protected go_back_btn = React.createRef<any>();
 
   closeCreate(): void {
-    //console.log(this.state)
+    //debugLog(this.state)
     // this.setState( {createLink : false})
   }
 
@@ -182,8 +195,8 @@ class GeneratorMenu extends React.Component<
     if (this.state.forcefield === "") {
       this.props.warningfunction("Please select a forcefield");
     } else {
-      //  console.log("GeneratorMenu::CheckNewMolecule");
-      /* console.dir({
+      //  debugLog("GeneratorMenu::CheckNewMolecule");
+      /* debugDir({
         forcefield: this.state.forcefield,
         moleculeToAdd: molecule,
         numberToAdd: count,
@@ -201,7 +214,7 @@ class GeneratorMenu extends React.Component<
 
   CheckNewLink(idLink1: string | undefined, idLink2: string | undefined): void {
     // check undefined value :
-    console.log("[CheckNewLink] idLink1:", idLink1, " idLink2:", idLink2);
+    debugLog("[CheckNewLink] idLink1:", idLink1, " idLink2:", idLink2);
     //checkLink( )
     if (typeof idLink1 == "undefined" || typeof idLink2 == "undefined") {
       this.props.warningfunction("Please select id for your new link.");
@@ -211,23 +224,23 @@ class GeneratorMenu extends React.Component<
   }
 
   onGoBack = () => {
-    //console.log(this.go_back_btn)
+    //debugLog(this.go_back_btn)
     // Click on the hidden link
     this.props.clear();
     this.go_back_btn.current.click();
   };
 
   handleUpload = (selectorFiles: FileList) => {
-    console.log("GeneratorMenu:handleUpload");
-    console.log(selectorFiles);
+    debugLog("GeneratorMenu:handleUpload");
+    debugLog(selectorFiles);
 
     this.setState({ want_go_back: false });
     this.props.onPolymerFileUpload(selectorFiles);
   };
 
   getDatabaseMolecule = async (molecule: Molecule) => {
-    console.log("##getDatabaseMolecule");
-    console.dir(molecule);
+    debugLog("##getDatabaseMolecule");
+    debugDir(molecule);
     this.setState({ want_go_back: false });
     this.setState({ database_modal_chooser: false });
     // This check is now irrelevant as database search account for forcefield compatiblity
@@ -263,7 +276,7 @@ class GeneratorMenu extends React.Component<
     /*
     This may be revised according to environment moelcule compatbility
     */
-    console.log("GeneratorMenu:startUpMoleculeFromHistory", ff, molFiles);
+    debugLog("GeneratorMenu:startUpMoleculeFromHistory", ff, molFiles);
     if (ff !== "martini3001" && this.state.forcefield === "martini3") {
       this.props.warningfunction("Wrong forcefield : " + ff);
       return;
@@ -272,7 +285,7 @@ class GeneratorMenu extends React.Component<
       return;
     }
 
-    console.log(molFiles.itp_files);
+    debugLog(molFiles.itp_files);
     this.setState({ want_go_back: false });
     //this.props.addmoleculecoord(molecule.gro.content)
     //this.props.submitCustomITP(molecule.itp)
@@ -309,7 +322,7 @@ class GeneratorMenu extends React.Component<
   };
 
   componentDidMount() {
-    //  console.log("GeneratorMenu:componentDidMount");
+    //  debugLog("GeneratorMenu:componentDidMount");
   }
 
   setEngineLoadError() {
@@ -321,7 +334,25 @@ class GeneratorMenu extends React.Component<
       this.state.environment,
     );
     return (
-      <div>
+      <div style={{ position: "relative", width: "100%" }}>
+        {/* Resize handle: drag to change the menu width (parent owns the width) */}
+        {this.props.onResizeStart && (
+          <Tooltip title="Drag to resize menu width">
+            <IconButton
+              size="small"
+              onPointerDown={this.props.onResizeStart}
+              style={{
+                position: "absolute",
+                top: 4,
+                right: 4,
+                cursor: "ew-resize",
+                zIndex: 10,
+              }}
+            >
+              <SwapHorizIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
         <ModalBackToDb
           openStatus={!!this.state.want_go_back}
           onClose={this.onWantGoBackCancel}
@@ -368,8 +399,8 @@ class GeneratorMenu extends React.Component<
           <ModalUploadToCustomStash
             format={this.state.uploadToCustomStash}
             onValidate={(title, content) => {
-              console.log("ModalUploadToCustomStash validatation");
-              console.log(title, content);
+              debugLog("ModalUploadToCustomStash validatation");
+              debugLog(title, content);
               if (this.state.uploadToCustomStash !== undefined) {
                 // ts linter
                 this.props.onPolymerFormUpload(
@@ -407,18 +438,30 @@ class GeneratorMenu extends React.Component<
           </Grid>
           {this.isDisplayReady() && (
             <Grid item>
-              <Typography
-                variant="subtitle1"
-                align="center"
-                style={{
-                  fontSize: "0.7rem",
-                  fontStyle: "italic",
-                  marginBottom: "1rem",
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  flexWrap: "wrap",
+                  gap: 2, // 8px between chips; bump to 1.5 or 2 if you want more
+                  mb: "1rem",
+                  fontSize: "0.75em",
                 }}
               >
-                polyply version: {this.props.versions?.engine} [vermouth:{" "}
-                {this.props.versions?.vermouth}]
-              </Typography>
+                <GitHubChip
+                  alias={`Polyply:${this.props.versions?.engine}`}
+                  url={"https://github.com/marrink-lab/polyply_1.0"}
+                  iconSize={1.25}
+                  fontSize={0.75}
+                ></GitHubChip>
+                {"       "}
+                <GitHubChip
+                  alias={`Polyply:${this.props.versions?.vermouth}`}
+                  url={"https://github.com/marrink-lab/vermouth-martinize"}
+                  iconSize={1.25}
+                  fontSize={0.75}
+                ></GitHubChip>
+              </Box>
             </Grid>
           )}
           <Grid
@@ -474,7 +517,11 @@ class GeneratorMenu extends React.Component<
         <Divider variant="middle" />
         <Marger size="2rem" />
 
-        {!this.isDisplayReady() ? (
+        {this.props.finalStep ? (
+          <Grid item>
+            <PolyplyFinalStep />
+          </Grid>
+        ) : !this.isDisplayReady() ? (
           <Grid item>
             {this.state.engineLoadError ? (
               <div style={{ paddingLeft: "1rem", paddingRight: "1rem" }}>
@@ -545,7 +592,7 @@ class GeneratorMenu extends React.Component<
                 <ForceFieldChooser
                   environments={this.props.environments}
                   onValidate={(lib: string, environment: string[]) => {
-                    /*console.log(
+                    /*debugLog(
                       "FFC validated forwarded to GeneratorMenu lib:",
                       lib,
                       "env:",
@@ -653,11 +700,18 @@ class GeneratorMenu extends React.Component<
                       }}
                       targetLister={() => {
                         const nodes = this.props.listSimulationMolecule();
-                        return nodes.reduce(
+                        const _ = nodes.reduce(
                           (uniq, name) =>
                             uniq.includes(name) ? uniq : uniq.concat([name]),
                           [] as string[],
                         );
+                        debugLog("Listing target");
+                        debugDir(_);
+                        return _;
+                      }}
+                      onSetTargetClick={(res: string) => {
+                        debugLog("GeneratorMenu::onSetTargetClick:" + res);
+                        this.props.onHighlightTargets(res);
                       }}
                       handleVermouthFFUpload={() => {
                         console.error("Vermouth FF upload not implemented yet");
@@ -673,14 +727,14 @@ class GeneratorMenu extends React.Component<
                           .map((n, i) => `${n}#${i}`)
                       }
                       onSelectItemEnter={(v, b) => {
-                        console.log(`GeneratorMenu::EnterEvent ${v}, ${b}`);
+                        debugLog(`GeneratorMenu::EnterEvent ${v}, ${b}`);
                         this.props.onNodeHighlight(
                           parseInt(v.split("#")[1]),
                           b,
                         );
                       }}
                       onSelectItemLeave={(v, b) => {
-                        console.log(`GeneratorMenu::LeaveEvent ${v}, ${b}`);
+                        debugLog(`GeneratorMenu::LeaveEvent ${v}, ${b}`);
                         this.props.onNodeHighlight(
                           parseInt(v.split("#")[1]),
                           b,
@@ -699,19 +753,25 @@ class GeneratorMenu extends React.Component<
                         );
                       }}
                       onAction={(v1, v2) => {
-                        console.log("Action !" + v1 + v2);
+                        debugLog("Action !" + v1 + v2);
                         this.setState({ want_go_back: false });
                         this.CheckNewLink(v1, v2);
                       }}
                       customPolymerOptions={[
                         [
+                          "Import MAD:Database",
+                          () => {
+                            this.setState({ database_modal_chooser: true });
+                          },
+                        ],
+                        [
                           "Upload ITP file",
                           () => {
-                            console.log(
+                            debugLog(
                               "[GeneratorMenu] setting uploadToCustomStash to ITP",
                             );
                             this.setState({ uploadToCustomStash: "itp" });
-                            console.log(this.state.uploadToCustomStash);
+                            debugLog(this.state.uploadToCustomStash);
                           },
                         ],
                         [
@@ -726,12 +786,6 @@ class GeneratorMenu extends React.Component<
                             this.setState({ uploadToCustomStash: "fasta" });
                           },
                         ],
-                        [
-                          "Import MAD:Database",
-                          () => {
-                            this.setState({ database_modal_chooser: true });
-                          },
-                        ],
                       ]}
                     />
                     {/*}
@@ -743,6 +797,7 @@ class GeneratorMenu extends React.Component<
                 />
                 */}
                     <BottomControls
+                      menuWidth={this.props.menuWidth}
                       onUndo={this.handle_previous}
                       onSubmit={() => {
                         const _ = this.props.listSimulationMolecule();

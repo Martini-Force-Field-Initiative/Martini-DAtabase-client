@@ -1,3 +1,4 @@
+import { debugDir } from '../../../../logger';
 import { ItpFile } from "itp_mad_parser";
 //export {ItpFile} from 'itp-parser-forked';
 
@@ -119,7 +120,7 @@ export const isValidPolymerObject = (o: any): o is PolyplyTopology => {
 };
 
 export const no_from_itp = (o: PolyplyTopology): boolean => {
-  //o.nodes.forEach((n: PolyplyNode) => console.dir(n));
+  //o.nodes.forEach((n: PolyplyNode) => debugDir(n));
   const from_itp_count = o.nodes.reduce(
     (acc: number, n: PolyplyNode) =>
       n.hasOwnProperty("from_itp") ? acc + 1 : acc,

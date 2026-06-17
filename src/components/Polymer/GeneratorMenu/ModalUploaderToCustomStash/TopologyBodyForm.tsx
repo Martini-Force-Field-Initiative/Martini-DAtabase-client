@@ -1,3 +1,4 @@
+import { debugLog } from '../../../../logger';
 import React, { useState } from "react";
 import { Stack, Typography } from '@mui/material';
 import Divider from '@mui/material/Divider';
@@ -77,11 +78,11 @@ export default function TopologyBodyForm(props:BodyProps){
         console.error("ITP upload error");
         props.onUploadError(e as string);
       }
-      console.log("itp file uploaded and parsed");
+      debugLog("itp file uploaded and parsed");
     }
     
     const handleSelectMoleculeChange = (moleculeNames:string[]) => {
-      console.log('loading molecule', moleculeNames);
+      debugLog('loading molecule', moleculeNames);
       const itpSubsetString = topologyContent.filter( (itp)=> moleculeNames.includes(itp?.name)).map(itp=>itp.toString()).join('\n')
       props.onContentChange( itpSubsetString);
       props.onTitleChange("itp_library");

@@ -9,17 +9,28 @@ interface BCProps {
   onUndo: ()=>void,
   onSubmit: ()=>void,
   onRepairClick: ()=>void,
-  onError:boolean 
+  onError:boolean,
+  // Width (px) of the resizable left menu. Used to keep the controls
+  // horizontally centered on the SVG viewer, not on the menu panel.
+  menuWidth?: number,
 }
 export default function BottomControls(props:BCProps) {
+  // The SVG viewer fills the viewport to the right of the menu, so its
+  // horizontal center sits at `menuWidth + (100vw - menuWidth) / 2`, i.e.
+  // `50vw + menuWidth / 2`. Use `position: fixed` so the bar is anchored to
+  // the viewport rather than the resizable menu's containing block.
+  const menuWidth = props.menuWidth ?? 0;
   return (
-      <AppBar position="absolute" color="transparent" 
-        sx={{ top: 'auto', bottom: 0, maxWidth: '25em', marginRight: '25%', backgroundColor:"white",
-            minWidth:"25em", borderRadius:'0.5em 0.5em 0em 0em'
+      <AppBar position="fixed" color="transparent"
+        sx={{ top: 'auto', bottom: 0, width: 'auto', maxWidth: '25em', minWidth: '25em',
+            left: `calc(50vw + ${menuWidth / 2}px)`, right: 'auto',
+            transform: 'translateX(-50%)', backgroundColor: "white",
+            borderRadius: '0.5em 0.5em 0em 0em'
 
          }}>
         <Toolbar
-        sx={{paddingTop:'0.5em', paddingBottom:"0.5em"}}>     
+        disableGutters
+        sx={{ p: 0, minHeight: 0 }}>
 
         <PolyplyControls
           onUndo         = { props.onUndo }

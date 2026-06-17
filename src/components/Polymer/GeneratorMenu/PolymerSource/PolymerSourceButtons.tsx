@@ -1,3 +1,4 @@
+import { debugInfo, debugLog } from '../../../../logger';
 import * as React from 'react';
 import Button from '@mui/material/Button';
 import ButtonGroup from '@mui/material/ButtonGroup';
@@ -21,7 +22,7 @@ export default function PolymerSourceButtons({options}:PSBProps) {
   const anchorRef = React.useRef<HTMLDivElement>(null);
 
   const handleClick = () => {
-    console.info(`[PolymerSource Button]You clicked ${options[state.selectedIndex]} passing it above`);
+    debugInfo(`[PolymerSource Button]You clicked ${options[state.selectedIndex]} passing it above`);
     options[state.selectedIndex][1]();
     setState({...state, selectedIndex:0 });
 
@@ -31,7 +32,7 @@ export default function PolymerSourceButtons({options}:PSBProps) {
     event: React.MouseEvent<HTMLLIElement, MouseEvent>,
     index: number,
   ) => {
-    console.log("You clicked on menu item")
+    debugLog("You clicked on menu item")
     setState({...state, open:false, selectedIndex:index});
   };
 

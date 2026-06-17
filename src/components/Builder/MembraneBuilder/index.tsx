@@ -1,3 +1,4 @@
+import { debugDir, debugLog } from '../../../logger';
 import React from "react";
 import * as ngl from "@mmsb/ngl";
 import {
@@ -149,7 +150,7 @@ class MembraneBuilder extends React.Component<MBuilderProps, MBuilderState> {
     try {
       /* console.warn('Fetching available lipids...');
       const lipids: string[] = await ApiHelper.request('settings/lipidModels');
-      console.log(lipids);
+      debugLog(lipids);
       this.setState({ available_lipids: lipids });
       */
     } catch (e) {
@@ -364,7 +365,7 @@ class MembraneBuilder extends React.Component<MBuilderProps, MBuilderState> {
         "settings/lipidModels",
         { parameters: { force_field, withCompatible: true } },
       );
-      //console.log(lipids);
+      //debugLog(lipids);
       if (Object.keys(lipids).length === 1) {
         // No compatible possiiblity reported
         this.setState({
@@ -434,16 +435,16 @@ class MembraneBuilder extends React.Component<MBuilderProps, MBuilderState> {
 
     if (this.state.addMolecule === "true") {
       if (isMolecule(molecule)) {
-        //console.log("MembraneBuilder:Case1 ");
-        //console.dir(molecule);
+        //debugLog("MembraneBuilder:Case1 ");
+        //debugDir(molecule);
         parameters.from_id = molecule.id;
         //parameters.force_field = molecule.force_field;
         parameters.force_field = this.state.ff;
         //moleculeInputFiles.from_id = molecule.id;
       } else {
         // Getting a molecule from the stash (protein it works)
-        //console.log("MembraneBuilder:Case2 ");
-        //console.dir(molecule);
+        //debugLog("MembraneBuilder:Case2 ");
+        //debugDir(molecule);
         //@ts-ignore
         moleculeInputFiles.pdb = {
           //@ts-ignore
@@ -469,7 +470,7 @@ class MembraneBuilder extends React.Component<MBuilderProps, MBuilderState> {
         parameters.force_field = this.state.ff;
       }
     } else {
-      //console.log("MembraneBuilder:Case2 ");
+      //debugLog("MembraneBuilder:Case2 ");
       parameters.force_field = this.state.ff;
     }
 
@@ -506,11 +507,11 @@ class MembraneBuilder extends React.Component<MBuilderProps, MBuilderState> {
     parameters.solvent_type = settings.solvent_type;
 
     /*
-    console.log("SocketEmit@" + "MembraneBuilder");
-    console.dir(parameters);
+    debugLog("SocketEmit@" + "MembraneBuilder");
+    debugDir(parameters);
     */
     this.socket.on("insaneResult", (res) => {
-      //console.log(res);
+      //debugLog(res);
       try {
         const result = this.parseInsaneResult(res);
         this.initNglWithResult(result, "no_water", molecule?.builder_mode);
@@ -525,8 +526,8 @@ class MembraneBuilder extends React.Component<MBuilderProps, MBuilderState> {
     });
 
     /*
-    console.log("Emiting@insaneSubmit:");
-    console.dir(parameters);
+    debugLog("Emiting@insaneSubmit:");
+    debugDir(parameters);
     */
 
     this.socket.emit("insaneSubmit", moleculeInputFiles, parameters);

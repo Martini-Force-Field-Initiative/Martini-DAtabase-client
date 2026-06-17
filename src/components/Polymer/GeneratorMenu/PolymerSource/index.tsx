@@ -1,3 +1,4 @@
+import { debugLog } from '../../../../logger';
 import * as React from "react";
 import { Grid } from '@material-ui/core';
 import PolymerSourceButtons from "./PolymerSourceButtons";
@@ -45,7 +46,7 @@ export default function PolymerSource(props: PSProps) {
                         options = { props.options }
                         onClick={ (index:number) =>{  // Just here for current compoenet  
                             setState({ ...state, selIndex:index})
-                            console.log("I got this " + index);
+                            debugLog("I got this " + index);
                             //setState({...state, open: false});
                             liveIndex = index;
                             //props.onClick[liveIndex]();

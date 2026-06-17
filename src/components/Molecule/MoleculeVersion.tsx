@@ -1,3 +1,4 @@
+import { debugDir, debugLog } from '../../logger';
 import React from 'react';
 import { Molecule } from '../../types/entities';
 import { Marger } from '../../helpers';
@@ -128,10 +129,10 @@ function createMoleculeTree(molecules: Molecule[]): MoleculeTree {
 export default function MoleculeVersion(props: { versions: Molecule[], current: Molecule, onVersionChange: (id: string) => void }) {
   
   /*
-  console.log("MoleculeVersion:props.versions")
-  console.dir(props.versions);
-  console.log("MoleculeVersion:props.currrent")
-  console.dir(props.current);
+  debugLog("MoleculeVersion:props.versions")
+  debugDir(props.versions);
+  debugLog("MoleculeVersion:props.currrent")
+  debugDir(props.current);
   */
   
   const [newVersion, setNewVersion] = React.useState(false);
@@ -166,7 +167,7 @@ export default function MoleculeVersion(props: { versions: Molecule[], current: 
             props.onVersionChange(molecule.id);
           }}
         >
-          <strong>{formatVersion(molecule)}</strong> • ({formatDetails(molecule)}) <Link onClick={() => { setNewVersion(true); setParent(molecule)}} style={{ color: "orange", fontSize: "small" }}> <Icon style={{ fontSize: "x-small" }} className={clsx("fas", "fa-plus", classes.linkIcon)} /> Add a derived model </Link>
+          <strong>{formatVersion(molecule)}</strong> • ({formatDetails(molecule)}) <Link component="button" type="button" onClick={(e: React.MouseEvent<any>) => { e.stopPropagation(); setNewVersion(true); setParent(molecule)}} style={{ color: "orange", fontSize: "small" }}> <Icon style={{ fontSize: "x-small" }} className={clsx("fas", "fa-plus", classes.linkIcon)} /> Add a derived model </Link>
         </Link>
       </Typography>
     );
@@ -239,7 +240,6 @@ export default function MoleculeVersion(props: { versions: Molecule[], current: 
         </Link>
       </div>
 
-    {/* Below block raises nested <a> error */}
       <Marger size="1.5rem" />
       {Object.entries(trees).map((obj,i) => {
         return (

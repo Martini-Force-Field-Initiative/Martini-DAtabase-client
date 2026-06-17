@@ -1,3 +1,4 @@
+import { debugLog } from '../../logger';
 import React from "react";
 import {
   Route,
@@ -85,7 +86,7 @@ const RouterCmpt = () => {
 };
 
 function LoadPolymerGenerator(props: RouteComponentProps) {
-  //console.log(Settings )
+  //debugLog(Settings )
   return (
     <WaitForLoginFinish
       /*WaitForDevLogged*/ {...props}

@@ -1,3 +1,4 @@
+import { debugLog } from '../../../../logger';
 import React from "react";
 import { makeStyles, Box, Typography } from "@material-ui/core";
 import { v4 as uuidv4 } from "uuid";
@@ -38,8 +39,8 @@ export default function IdpForm(props: IdpFormProps) {
 
   const detectConflicts = (regions: IdpRegion[]): number[] => {
     /*
-    console.log("detectConflicts insde");
-    console.log(regions);
+    debugLog("detectConflicts insde");
+    debugLog(regions);
     */
     const data = regions.map((region) => {
       const [uid, chain, start, stop] = region;
@@ -54,7 +55,7 @@ export default function IdpForm(props: IdpFormProps) {
           : undefined,
       ];
     });
-    //console.log(data);
+    //debugLog(data);
     const res = new Set<number>();
     for (let i = 0; i < data.length - 1; i++) {
       if (data[i][1] === "") continue;
@@ -72,9 +73,9 @@ export default function IdpForm(props: IdpFormProps) {
           data[j][3] as number,
         ];
         /*
-        console.log("Comp ", bg1, sp1, bg2, sp2, "from");
-        console.log(data[i]);
-        console.log(data[j]);
+        debugLog("Comp ", bg1, sp1, bg2, sp2, "from");
+        debugLog(data[i]);
+        debugLog(data[j]);
         */
         if (bg1 >= bg2 && bg1 <= sp2) {
           res.add(i);
@@ -119,10 +120,10 @@ export default function IdpForm(props: IdpFormProps) {
   };
 
   const onCancelRegion = (region_id: string) => {
-    //console.log("Removing " + region_id);
+    //debugLog("Removing " + region_id);
 
     IDP_regions_as_ref.current = IDP_regions_as_ref.current.filter((_) => {
-      //console.log(region_id + " " + _[0]);
+      //debugLog(region_id + " " + _[0]);
       return _[0] !== region_id;
     });
 
@@ -150,7 +151,7 @@ export default function IdpForm(props: IdpFormProps) {
     start: string,
     stop: string,
   ) => {
-    /*  console.log(
+    /*  debugLog(
       `IdpForm: onValueChange ${region_id} ${chain} ${start} ${stop}`,
     );*/
     setCurrentlyValid(chain !== "" && start !== "" && stop !== "");
@@ -162,8 +163,8 @@ export default function IdpForm(props: IdpFormProps) {
     });
     if (isNew) IDP_regions_as_ref.current.push([region_id, chain, start, stop]);
     /*
-    console.log(`IDPregions udpated:`);
-    console.log(IDP_regions_as_ref.current);
+    debugLog(`IDPregions udpated:`);
+    debugLog(IDP_regions_as_ref.current);
     */
     setIDP_regions(IDP_regions_as_ref.current);
     conflictingRows.current = detectConflicts(IDP_regions_as_ref.current);

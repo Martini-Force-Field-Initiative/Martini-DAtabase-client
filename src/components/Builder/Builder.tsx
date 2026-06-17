@@ -1,3 +1,4 @@
+import { debugDir, debugLog } from "../../logger";
 import React from "react";
 import {
   withStyles,
@@ -44,6 +45,7 @@ import { MZError } from "./ProteinBuilder/MartinizeError";
 import MartinizeForm from "./ProteinBuilder/MartinizeForm";
 import MartinizeGenerated from "./ProteinBuilder/MartinizeGenerated";
 import GoEditor from "./ProteinBuilder/GoEditor";
+import GitHubChip from "../SharedComponents/DependencyChips";
 import GoBondsHelper from "./GoBondsHelper";
 import { BondsRepresentation } from "./BondsRepresentation";
 import BaseBondsHelper, { BondMember } from "./BaseBondsHelper";
@@ -210,7 +212,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
       const params = this.props.match.params as any;
       const jobId = params.id;
       this.setState({ running: "load_history" }, () =>
-        console.log(`RNG:${this.state.running}`),
+        debugLog(`RNG:${this.state.running}`),
       );
       this.loadFromHistory(jobId);
     }
@@ -223,7 +225,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
         `history/get?jobId=${jobId}`,
       );
       /*   console.warn("==>");
-      console.dir(job);
+      debugDir(job);
       */
       if (job.type === "polyply") {
         this.reloadJobSettingsIntoStatePolyplyMockup(job);
@@ -245,12 +247,12 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
           load_error_message: errorToText(e as any),
           running: "load_error",
         } /* ,
-        () => console.log(`RNG:${this.state.running}`) */,
+        () => debugLog(`RNG:${this.state.running}`) */,
       );
     }
   }
   reloadJobSettingsIntoStatePolyplyMockup(job: ReadedJobDoc) {
-    console.log("reloadJobSettingsIntoStatePolyplyMockup");
+    debugLog("reloadJobSettingsIntoStatePolyplyMockup");
     this.setState({
       builder_force_field: job.settings.ff,
       builder_mode: "classic",
@@ -300,7 +302,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
   }
 
   async loadBonds(martinizeFiles: MartinizeFiles, mode: "go" | "elastic") {
-    //console.log(`[Builder:loadBonds] with mode ${mode}...`);
+    //debugLog(`[Builder:loadBonds] with mode ${mode}...`);
     const goOrElastic =
       mode === "go"
         ? await GoBondsHelper.readFromItps(
@@ -456,10 +458,10 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
   }) {
     /*
     console.warn("initCoarseGrainPdb");
-    console.dir(options);
-    console.log(options.files.pdb.content);
-    console.log(options.files);
-    console.log(await options.files.pdb.content.text());
+    debugDir(options);
+    debugLog(options.files.pdb.content);
+    debugLog(options.files);
+    debugLog(await options.files.pdb.content.text());
     */
     let component: NglComponent;
     const polarizableFF =
@@ -485,7 +487,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
       );
       return;
     }
-    //console.log("ngl.load passed");
+    //debugLog("ngl.load passed");
     const cg_ngl_settings = {
       radius: true,
       color: true,
@@ -494,8 +496,8 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
       radiusFactor: this.state.bead_radius_factor,
     };
     /*
-    console.log("[initCoarseGrainPdb] CG_NGL settings");
-    console.dir(cg_ngl_settings);
+    debugLog("[initCoarseGrainPdb] CG_NGL settings");
+    debugDir(cg_ngl_settings);
     */
     const repr = component.add<BallAndStickRepresentation>(
       "ball+stick",
@@ -524,13 +526,13 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
         options.files.goOrElastic
       ) {
         options.files.goOrElastic.stringifyChainIdBonds();
-        /*   console.log(
+        /*   debugLog(
           `[Builder:initCoarseGrainPdb] Status of the ${options.mode}.representation`,
         );
 
-        console.log(options.files);
-        console.log(options.files.goOrElastic.representation);
-        console.log(
+        debugLog(options.files);
+        debugLog(options.files.goOrElastic.representation);
+        debugLog(
           `[Builder:initCoarseGrainPdb] trying to ${options.mode}.render`,
         );
         */
@@ -540,14 +542,14 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
     }
     /*
     console.warn("initCoarseGrainPdb NGL startup completed, setting states");
-    console.dir("options.file.pdb");
-    console.dir(options.files.pdb);
-    console.dir("options.file.pdb.content");
-    console.dir(options.files.pdb.content);
-    console.dir("coarse_grain_ngl: component");
-    console.dir(component);
-    console.dir("Builder.state");
-    console.dir(this.state);
+    debugDir("options.file.pdb");
+    debugDir(options.files.pdb);
+    debugDir("options.file.pdb.content");
+    debugDir(options.files.pdb.content);
+    debugDir("coarse_grain_ngl: component");
+    debugDir(component);
+    debugDir("Builder.state");
+    debugDir(this.state);
  */
     // Register the component
     this.setState(
@@ -555,7 +557,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
         running: "done",
         coarse_grain_pdb: options.files.pdb.content,
         coarse_grain_ngl: component,
-      } /*, () => console.log(`RNG:${this.state.running}`)*/,
+      } /*, () => debugLog(`RNG:${this.state.running}`)*/,
     );
 
     //console.warn("initCoarseGrainPdb Completed");
@@ -566,7 +568,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
   async initAllAtomPdb(file: File) {
     /*
     console.warn("initAllAtomPdb");
-    console.dir(file);
+    debugDir(file);
     */
     const component = await this.ngl.load(file, { coarse_grained: false });
 
@@ -656,11 +658,11 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
         target_ensembl[1] !== undefined
       ) {
         /*
-        console.log("[Builder:addOrRemoveVBond] Add bonds between two sets");
-        console.dir(target_ensembl[0]);
-        console.dir(target_ensembl[1]);
-        console.log('Rosetta');
-        console.log( (goOrElastic as GoBondsHelper).index_to_real);
+        debugLog("[Builder:addOrRemoveVBond] Add bonds between two sets");
+        debugDir(target_ensembl[0]);
+        debugDir(target_ensembl[1]);
+        debugLog('Rosetta');
+        debugLog( (goOrElastic as GoBondsHelper).index_to_real);
         */
         const _index1 = Array.from(target_ensembl[0]).map((e) =>
           parseInt(e.split(":")[1]),
@@ -678,9 +680,9 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
         );
 
         /*
-        console.log(`[Builder:addOrRemoveVBond] 'add' got two indexes sets`);
-        console.log(_index1);
-        console.log(_index2);
+        debugLog(`[Builder:addOrRemoveVBond] 'add' got two indexes sets`);
+        debugLog(_index1);
+        debugLog(_index2);
       */
         // Add line between each element of set
         for (const [i, atom1] of _index1.entries()) {
@@ -705,7 +707,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
         target_ensembl !== undefined &&
         target_ensembl[1] === undefined
       ) {
-        //console.log("[Builder:addOrRemoveVBond] Add bonds inside one set");
+        //debugLog("[Builder:addOrRemoveVBond] Add bonds inside one set");
         const _index = Array.from(target_ensembl[0]).map((e) =>
           parseInt(e.split(":")[1]),
         );
@@ -721,7 +723,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
                 { chain: chain[j], realIdx: _index[j] },
               )
             ) {
-              //console.log("skippy");
+              //debugLog("skippy");
               continue;
             }
             goOrElastic.add(
@@ -746,16 +748,16 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
       //REMOVE --> NEEDS TO BE SYNCED W/ VALIDATE IDENTICALLY IN 3 ABOVE CASES
       // DONE
       if (target !== undefined) {
-        //console.log(`[Builder:addOrRemoveVBond] REMOVE pairs ${options.target},${options.chain}`);
+        //debugLog(`[Builder:addOrRemoveVBond] REMOVE pairs ${options.target},${options.chain}`);
         // Source&Target are REAL ATOM index
         // Remove a single bond
         //const [name1, name2] = target.map(e => (goOrElastic as GoBondsHelper).realIndexToGoName(e));
         /*
-        console.log(`[Builder:addOrRemoveVBond] REMOVE GO indexed pairs ${name1}, ${name2}`);
-        console.log("Rel TO del from")
-        console.dir(goOrElastic.relations);
-        console.log(`Trying to access ${chain?chain[0]:0}:${target[0]}, ${chain?chain[1]:0}:${target[1]}`);
-        console.log(goOrElastic.relations.get(`${chain?chain[0]:0}:${target[0]}`, `${chain?chain[1]:0}:${target[1]}`));
+        debugLog(`[Builder:addOrRemoveVBond] REMOVE GO indexed pairs ${name1}, ${name2}`);
+        debugLog("Rel TO del from")
+        debugDir(goOrElastic.relations);
+        debugLog(`Trying to access ${chain?chain[0]:0}:${target[0]}, ${chain?chain[1]:0}:${target[1]}`);
+        debugLog(goOrElastic.relations.get(`${chain?chain[0]:0}:${target[0]}`, `${chain?chain[1]:0}:${target[1]}`));
         */
         goOrElastic.remove(
           chain ? chain[0] : 0,
@@ -776,15 +778,15 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
         // Remove every bond from this atom
         const ch_sgl: number | string = chain_single ? chain_single : 0;
         /*
-        console.log(`[Builder:addOrRemoveVBond] REMOVE all bonds from this atom ${target_single},${ch_sgl}`);
-        console.log("It should be a GoIndex incoming ^^");
+        debugLog(`[Builder:addOrRemoveVBond] REMOVE all bonds from this atom ${target_single},${ch_sgl}`);
+        debugLog("It should be a GoIndex incoming ^^");
        */
-        //console.dir(go.relations);
+        //debugDir(go.relations);
         const realI = (goOrElastic as GoBondsHelper).goIndexToRealIndex(
           target_single,
         );
         //const partners = go.findBondsOf(target_single, ch_sgl);
-        //console.log(`Trying to goOrElastic.remove(${ch_sgl}, ${realI})`);
+        //debugLog(`Trying to goOrElastic.remove(${ch_sgl}, ${realI})`);
         goOrElastic.remove(ch_sgl, realI);
         goOrElastic.rmCustomBonds(ch_sgl, realI);
 
@@ -793,8 +795,8 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
         if (targetBondEnsembl === undefined)
           throw new Error("[Builder:addOrRemoveVBond]This should not happen");
         /*
-        console.log(`[Builder:addOrRemoveVBond] REMOVE following bonds (from ensembl operations)`);
-        console.log(targetBondEnsembl);
+        debugLog(`[Builder:addOrRemoveVBond] REMOVE following bonds (from ensembl operations)`);
+        debugLog(targetBondEnsembl);
         */
         targetBondEnsembl.forEach((d) => {
           const [a1, a2, _] = d;
@@ -830,16 +832,16 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
       | [string, string][],
   ) => {
     let realHighlightIdx = highlight;
-    //console.log(`[Builder:redrawVBonds] inputs atom_num ${highlight} chain_num:${h_chains}`);
+    //debugLog(`[Builder:redrawVBonds] inputs atom_num ${highlight} chain_num:${h_chains}`);
     let mode = "oneAtom";
     if (typeof highlight === "number") {
-      //console.log(`[Builder:redrawVBonds] single number conversion ...`)
+      //debugLog(`[Builder:redrawVBonds] single number conversion ...`)
       // transform virt_part_index to real_atom_index
       realHighlightIdx = (
         this.state.files!.goOrElastic! as GoBondsHelper
       ).goIndexToRealIndex(highlight);
       //realHighlightIdx = nglAtom - 1;
-      //console.log(`[Builder:redrawVBonds] single number virt_part_to_real index conversion from ${highlight} to ${realHighlightIdx}`);
+      //debugLog(`[Builder:redrawVBonds] single number virt_part_to_real index conversion from ${highlight} to ${realHighlightIdx}`);
     }
 
     let h1 = 0,
@@ -890,10 +892,10 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
       // Highlight every link from highlight go atom
       h1 = realHighlightIdx;
       c1 = h_chains;
-      //console.log(`Builder:redrawVBonds] Highlight every link from real particule index, chain: ${h1} ${c1}`);
+      //debugLog(`Builder:redrawVBonds] Highlight every link from real particule index, chain: ${h1} ${c1}`);
     } else {
       // TO RESUME HERE : this breaks single atoom selection, maybe it should not be called on sinlge atom click
-      console.log(`Builder:redrawVBonds] Empty selection`);
+      debugLog(`Builder:redrawVBonds] Empty selection`);
 
       //throw(`[Builder:redrawGoBonds] unexpected single atom selector combo (${typeof realHighlightIdx} ${typeof h_chains}) ${realHighlightIdx} ${h_chains}`);
     }
@@ -908,7 +910,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
             chain1: number | string,
             chain2: number | string,
           ) => {
-            //console.log(`[Builder:redrawVBonds::predicate] ${atom1}, ${chain1} : ${atom2}, ${chain2}`);
+            //debugLog(`[Builder:redrawVBonds::predicate] ${atom1}, ${chain1} : ${atom2}, ${chain2}`);
             // Test current pair vs all seeked
             if (
               mode === "manyPairs" &&
@@ -937,7 +939,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
             }
             // Test current pair vs the one seeked
             if (realHighlightIdx && Array.isArray(realHighlightIdx)) {
-              //console.log(`[Builder:redrawVBonds::predicate] seeked pair ({${h1},${c1}}, {${h2},${c2}}) lookup pair ({${atom1},${chain1}}, {${atom2},${chain2}})`)
+              //debugLog(`[Builder:redrawVBonds::predicate] seeked pair ({${h1},${c1}}, {${h2},${c2}}) lookup pair ({${atom1},${chain1}}, {${atom2},${chain2}})`)
               return (
                 (atom1 === h1 &&
                   chain1 == c1 &&
@@ -948,7 +950,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
             }
             // Highlight is a number,we check that visited src or target match atom index and chain index|label
             else if (h1) {
-              //console.log(`[Builder:redrawVBonds::predicate] seeked single atom from links {${h1},${c1}} lookup link atoms pairs  ({${atom1},${chain1}}, {${atom2},${chain2}})`)
+              //debugLog(`[Builder:redrawVBonds::predicate] seeked single atom from links {${h1},${c1}} lookup link atoms pairs  ({${atom1},${chain1}}, {${atom2},${chain2}})`)
               return (
                 (atom1 === h1 && chain1 === c1) ||
                 (atom2 === h1 && chain2 === c1)
@@ -970,8 +972,8 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
                                         { [chainIdx: number]: {[atomIdx:number]:string} }*/,
   ) => {
     /*
-    console.log(`[Builder:setSChemeIdColorForCg] input:`);
-    console.log(atomColors);
+    debugLog(`[Builder:setSChemeIdColorForCg] input:`);
+    debugLog(atomColors);
     */
     // Convert to ngl index
     const atomColorIdx: { [nglGoIdx: number]: string } = {};
@@ -996,7 +998,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
   };
 
   restoreSettingsAfterGo(revert_go_changes: boolean) {
-    console.log("[Builder:restoreSettingsAfterGo] Firing");
+    debugLog("[Builder:restoreSettingsAfterGo] Firing");
     // Restore all settings
     if (this.saved_viz_params) {
       const {
@@ -1031,7 +1033,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
     }
 
     this.setState({ running: "done" }, () =>
-      console.log(`RNGx:${this.state.running}`),
+      debugLog(`RNGx:${this.state.running}`),
     ); // This triggers b4 modal display inside GoEditor
   }
 
@@ -1085,7 +1087,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
         error: undefined,
         martinize_error: undefined,
       } /* ,
-      () => console.log(`RNG:${this.state.running}`),
+      () => debugLog(`RNG:${this.state.running}`),
       */,
     );
 
@@ -1120,8 +1122,8 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
         this.setState({ martinize_step: "Sending your files to server" });
         /*  console.warn("Data sent to Martinize");
         console.warn(form_data);
-        console.dir(pdb_content);
-        console.log(RUN_ID);
+        debugDir(pdb_content);
+        debugLog(RUN_ID);
         */
         // Martinize step
         socketClient.on(
@@ -1295,7 +1297,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
           martinize_step: "",
           martinize_error: error,
         } /*,
-        () => console.log(`RNG:${this.state.running}`),
+        () => debugLog(`RNG:${this.state.running}`),
         */,
       );
 
@@ -1354,7 +1356,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
         running: "pdb_read",
       },
       /* ,
-      () => console.log(`RNG:${this.state.running}`),
+      () => debugLog(`RNG:${this.state.running}`),
       */
     );
 
@@ -1364,7 +1366,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
           {
             running: "martinize_params",
           } /*,
-          () => console.log(`RNG:${this.state.running}`),
+          () => debugLog(`RNG:${this.state.running}`),
            */,
         );
       })
@@ -1375,7 +1377,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
             running: "pdb",
             error: e,
           } /* ,
-          () => console.log(`RNG:${this.state.running}`),
+          () => debugLog(`RNG:${this.state.running}`),
           */,
         );
       });
@@ -1602,7 +1604,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
 
   onWantGoBack = (e: React.MouseEvent) => {
     // Don't go to #!
-    //console.log("Dont go !");
+    //debugLog("Dont go !");
     e.preventDefault();
 
     this.setState({
@@ -1639,7 +1641,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
     chain2: number | string,
   ) => {
     /*
-    console.log(
+    debugLog(
       `[Builder:onBondCreate] receiveing ${chain1},${chain2} ${go_atom_1}, ${go_atom_2}`,
     );
     */
@@ -1693,7 +1695,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
     currBonds: [BondMember, BondMember, string][],
     set2?: Set<string>,
   ) => {
-    //console.log(`[Builder:onBondRemoveFromSet]`);
+    //debugLog(`[Builder:onBondRemoveFromSet]`);
     this.addOrRemoveVBond({
       mode: "remove",
       targetBondEnsembl: currBonds,
@@ -1701,12 +1703,12 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
   };
   //
   onGoEditorValidate = async (restore: boolean = true) => {
-    /*console.log(
+    /*debugLog(
       `[Builder:onGoEditorValidate] firing with restore = ${restore}`,
     );
     */
 
-    //console.log(`[Builder:onGoEditorValidate] starting to apply bond to file`);
+    //debugLog(`[Builder:onGoEditorValidate] starting to apply bond to file`);
     if (!this.state.files) {
       console.error("files are not registered in state, should not happen");
       return;
@@ -1797,7 +1799,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
       goOrElastic: this.state.files!.goOrElastic!.clone(),
     };
 
-    //console.log("saved vized params go", this.saved_viz_params.go)
+    //debugLog("saved vized params go", this.saved_viz_params.go)
 
     // Apply custom params
     this.onRepresentationChange(undefined, ["ball+stick"]);
@@ -1818,7 +1820,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
     // Load the go editor
     this.setState(
       { running: "go_editor", virtual_link_opacity: 1 } /* , () =>
-      console.log(`RNG:${this.state.running}`),*/,
+      debugLog(`RNG:${this.state.running}`),*/,
     );
   };
 
@@ -1848,7 +1850,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
       return;
     }
     /*
-    console.log(
+    debugLog(
       `[Builder: async applyBondsToFiles] starting w/ files`,
       this.state.files,
     );
@@ -1858,7 +1860,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
 
     if (files.goOrElastic) {
       // We only need to alter "go_nbparams.itp"
-      //console.log(`[Builder:applyBondsToFiles] go or elastic`);
+      //debugLog(`[Builder:applyBondsToFiles] go or elastic`);
       const to_replace = await files.goOrElastic.toOriginalFiles();
 
       for (const mol_file of to_replace!) {
@@ -1899,7 +1901,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
     }
 
     //console.warn("downloadMolecule");
-    //console.dir(this.state.files);
+    //debugDir(this.state.files);
     const zip = new JSZip();
     const files = this.state.files;
     zip.file(files.pdb.name, files.pdb.content);
@@ -2080,17 +2082,23 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
                 >
                   Build a molecule with martinize
                 </Typography>
-                <Typography
-                  variant="subtitle1"
-                  align="center"
+                <div
                   style={{
-                    fontSize: "0.7rem",
-                    fontStyle: "italic",
-                    marginBottom: "1rem",
+                    display: "flex",
+                    justifyContent: "center",
+                    marginTop: "1.25rem",
+                    marginBottom: "1.75rem",
                   }}
                 >
-                  martinize version : {this.state.version}
-                </Typography>
+                  {this.state.version !== undefined && (
+                    <GitHubChip
+                      alias={`Martinize2:${this.state.version}`}
+                      url={"https://github.com/marrink-lab/vermouth-martinize"}
+                      iconSize={1.5}
+                      fontSize={1}
+                    />
+                  )}
+                </div>
                 {/* modify this
                 https://mui.com/material-ui/react-grid/
                  */}
@@ -2136,7 +2144,7 @@ class MartinizeBuilder extends React.Component<MBProps, MBState> {
                       // When state is initial state (main loader), don't show the confirm modal
                       onClick={(e) => {
                         if (this.state.running !== "pdb") {
-                          //console.log("Shwoing stuff");
+                          //debugLog("Shwoing stuff");
                           this.setState({ want_go_tutorial: true });
                           this.onWantGoBack(e);
                         }

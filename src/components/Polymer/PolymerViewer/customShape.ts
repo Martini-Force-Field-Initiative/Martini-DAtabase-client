@@ -1,3 +1,4 @@
+import { debugDir, debugLog } from '../../../logger';
 import * as d3 from "d3";
 
 interface CircularShapePoint {
@@ -30,7 +31,7 @@ export const generateBlurShape = (size:number) => {
     const raw_data = [...new Array(waveResolution *waveNumber)]/* not exact*/
         .map(
             (_, x) => {
-                //console.log(x, "%", waveResolution, "==",  x%waveResolution, 
+                //debugLog(x, "%", waveResolution, "==",  x%waveResolution, 
                 //     wScale(x%waveResolution), "=>", (-1) * cos( wScale(x%waveResolution) ))
                 x = x%waveResolution;
                 return (-1) * cos( wScale(x) )
@@ -45,8 +46,8 @@ export const generateBlurShape = (size:number) => {
 
     const data:[number, number][] = raw_data
         .map((v,i) => [x(i), (v * size  * 5)]);
-    //console.log("BlurShape Specs");
-    //console.dir(data);
+    //debugLog("BlurShape Specs");
+    //debugDir(data);
     return lineRadialGenerator(data);
 }
 
@@ -70,7 +71,7 @@ export const generateBlurShape00 = (size:number) => {
     const raw_data = [...new Array(waveResolution *waveNumber)]/* not exact*/
         .map(
             (_, x) => {
-                console.log(x, "%", waveResolution, wScale(x), "=>", Math.cos( wScale(x) ))
+                debugLog(x, "%", waveResolution, wScale(x), "=>", Math.cos( wScale(x) ))
                 x = x%waveResolution;
                 return (Math.cos( wScale(x) ) + 2 ) * hCrestFactor;
             }
@@ -158,8 +159,8 @@ export const generateBlurShape2 = (size:number) => {
             return { pos:i, value:new_v / smooth};
         });
 
-    console.log(raw_data);   
-    console.log(data);         
+    debugLog(raw_data);   
+    debugLog(data);         
 
     const area = d3.areaRadial()
         .curve(d3.curveLinearClosed)

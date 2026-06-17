@@ -1,3 +1,4 @@
+import { debugDir, debugLog } from '../../../logger';
 import React from 'react';
 import NglWrapper, { NglComponent, NglRepresentation } from '../NglWrapper';
 import PickingProxy from '@mmsb/ngl/declarations/controls/picking-proxy';
@@ -136,7 +137,7 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
     if (this._setState === undefined)
       this._setState = this.setState;
     this.setState = this._setState;
-    console.log("[GoEditor] Mount..end");
+    debugLog("[GoEditor] Mount..end");
     // @ts-ignore
     window.GoEditor = this;
     this.props.stage.onClick(this.nglClickReciever);
@@ -147,7 +148,7 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
   }
 
   componentWillUnmount() {
-    console.log("[GoEditor] unmounting");
+    debugLog("[GoEditor] unmounting");
     this.props.stage.removeEvents();
     this.props.onRedrawGoBonds();
     this.props.stage.restoreDefaultMouseEvents();
@@ -157,7 +158,7 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
     this.setState = (state,callback)=>{
       return;
     };
-    console.log("[GoEditor] unmounting..end");
+    debugLog("[GoEditor] unmounting..end");
   }
 
   nglClickReciever = (pp?: PickingProxy) => {
@@ -169,8 +170,8 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
   */
     if (!pp) {   
       if(this.state.selected?.type === 'selection') {
-        console.log("[GoEditor] airball 1 click");
-        console.log(this.state);
+        debugLog("[GoEditor] airball 1 click");
+        debugLog(this.state);
 
         this.setState({selected : undefined, mode:'idle'});
         this.removeBondHighlight();
@@ -180,12 +181,12 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
     };
 
   //
-    console.log(`[GoEditor:NglClickReceiver] picking proxy object (see pp?.object)`);
-    console.dir(pp);
+    debugLog(`[GoEditor:NglClickReceiver] picking proxy object (see pp?.object)`);
+    debugDir(pp);
     if (!pp) {   
-      console.log("[GoEditor] airball 2 click");
-      console.log(this.state.selected);
-      console.log(this.state.mode);
+      debugLog("[GoEditor] airball 2 click");
+      debugLog(this.state.selected);
+      debugLog(this.state.mode);
       // Disable selection. De-highlight all only if not in atom selection
       if (this.state.mode === 'idle') {
         if (this.state.selected?.type === 'link') {
@@ -212,7 +213,7 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
     if ((this.props.mode === "go" && pp.atom?.element === "CA") || 
         (this.props.mode === "elastic" && pp.atom?.atomname === "BB")) {
       // GO atom is clicked, convert its 0 based index to realIndex
-      console.log(`[GoEditor:NglClickReceiver] GO atom cliked pp.atom.index, pp.atom.chaineIndex are ${pp.atom.index} ${pp.atom.chainIndex}`);
+      debugLog(`[GoEditor:NglClickReceiver] GO atom cliked pp.atom.index, pp.atom.chaineIndex are ${pp.atom.index} ${pp.atom.chainIndex}`);
       const chain = pp.atom.chainname;/*this.props.mode === "elastic" ? pp.atom.chainIndex : 
                     pp.atom.chainname;*/
         
@@ -225,16 +226,16 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
      
 
       if (this.state.mode === 'add-link' && this.state.selected?.type === 'atom') { 
-         console.log(`[GoEditor:NglClickReceiver] 'add-link' && state.selected.type === 'atom'`); 
+         debugLog(`[GoEditor:NglClickReceiver] 'add-link' && state.selected.type === 'atom'`); 
         // Create the bond if possible
         if (this.state.selected.source !== curr_sel.source || this.state.selected.chain !== curr_sel.chain) {
-          console.log(`[GoEditor:NglClickReceiver] props.onBondCreate`);
+          debugLog(`[GoEditor:NglClickReceiver] props.onBondCreate`);
           const prev_source = this.state.selected.source;
           const prev_chain = this.state.selected.chain;
           this.props.onBondCreate(this.state.selected.source, curr_sel.source, this.state.selected.chain, curr_sel.chain)
             .then(() => {              
               // redraw the bonds for selected atom
-              console.log(`[GoEditor:NglClickReceiver] props.onBondCreate.then=> redrawing bond for ${curr_sel.source }, ${curr_sel.chain}`);
+              debugLog(`[GoEditor:NglClickReceiver] props.onBondCreate.then=> redrawing bond for ${curr_sel.source }, ${curr_sel.chain}`);
               this.highlightBond([curr_sel.source,prev_source], [curr_sel.chain, prev_chain]);
             });
         }
@@ -274,7 +275,7 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
 
       // this might be a go bond...
       const obj = pp.object as PickedGoBond;
-      console.log(`[GoEditor:nglClickReceiver] assessing if object is a bond based on its name ==>${obj.name}`);
+      debugLog(`[GoEditor:nglClickReceiver] assessing if object is a bond based on its name ==>${obj.name}`);
       if (!obj.name.startsWith('[GO]') && !obj.name.startsWith('[ELASTIC]')) {
         return;
       }
@@ -289,7 +290,7 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
         throw new Error("Something wrong with chain label on bonds ngl cylinder representation")
 
       const [ _, chain1, resnum1, chain2, resnum2, atom_index1, atom_index2 ] = m.map( (e,i)=> i > 3 ? parseInt(e) : e);
-      console.log(`[GoEditor:nglClickReceiver] ckicked bond param extracted ${[ chain1, resnum1, chain2, resnum2, atom_index1, atom_index2 ]}` );
+      debugLog(`[GoEditor:nglClickReceiver] ckicked bond param extracted ${[ chain1, resnum1, chain2, resnum2, atom_index1, atom_index2 ]}` );
       this.highlightBond([atom_index1 as number, atom_index2 as number], [chain1, chain2]);
 
         this.setState({
@@ -319,14 +320,14 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
   highlightAtom(virtPartIndex: number, chain:number|string) {
     const atomColors : { [vpIdx:number] : string} = { }; 
     atomColors[virtPartIndex] = "#ff00ff";
-    console.log("[GoEditor::highlightAtom] " + virtPartIndex)
+    debugLog("[GoEditor::highlightAtom] " + virtPartIndex)
     this.props.setColorForCgRepr(atomColors);
     this.props.onRedrawGoBonds(virtPartIndex, 1, chain);
   }
   highlightGroup(g1_sel : Set<string>, bonds:[BondMember,BondMember, string][],
                  g2_sel?: Set<string>) {
   
-    console.log(`[GO-EDITOR:highlightgroup] ${g1_sel} ### ${g2_sel}`);
+    debugLog(`[GO-EDITOR:highlightgroup] ${g1_sel} ### ${g2_sel}`);
 
     //const colorAtoms: {[chainIdx: string]: {[atomIdx:number]:string} } = {};
     const colorAtoms: {[chainIdx: string]: string } = {};
@@ -339,8 +340,8 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
         const serial = ch_at_g2.split(":")[1];
         colorAtoms[serial] = "#ffff00";
       }
-    console.log(`[GoEditor:highlightGroup] setting following colorAtom`);
-    console.log(colorAtoms);
+    debugLog(`[GoEditor:highlightGroup] setting following colorAtom`);
+    debugLog(colorAtoms);
     this.props.setColorForCgRepr(colorAtoms);
     const a:[number,number][] = bonds.map((b)=>[b[0].realIdx, b[1].realIdx]);
     const c:[number|string,number|string][] = bonds.map((b)=>[b[0].chain, b[1].chain]);
@@ -363,9 +364,9 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
     this.setState({processingLJ:true})
 
     
-    console.log(this.state.epsilonLJ);
-    console.log(this.state.selected);
-    console.log("onApplyEpsilonLJ done");
+    debugLog(this.state.epsilonLJ);
+    debugLog(this.state.selected);
+    debugLog("onApplyEpsilonLJ done");
     if(this.state.selected?.type === "selection")
       (this.props.goInstance as GoBondsHelper).updateLJ(
         { epsilon:this.state.epsilonLJ},
@@ -388,8 +389,8 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
       return;
     }
     // GL TO DO HERE
-    console.log(`[GoEditor:onRemoveAllBonds]`);
-    console.log(selected);
+    debugLog(`[GoEditor:onRemoveAllBonds]`);
+    debugLog(selected);
     //@ts-ignore
     this.props.onAllBondRemove(selected.chain, selected.source);
    
@@ -460,9 +461,9 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
 
     // Get all indexes of go sites for g1, we offset the index so we match the 
     if(this.props.mode === "go") {
-      console.log(`g1 ("${g1}") atom selection data`)
+      debugLog(`g1 ("${g1}") atom selection data`)
       this.repr.iterateOverGoSitesOf(g1, ap => {
-        console.log('[g1]', ap.index, ap.number, ap.serial, ap.atomname, ap.chainname, ap.resname, ap.resno);
+        debugLog('[g1]', ap.index, ap.number, ap.serial, ap.atomname, ap.chainname, ap.resname, ap.resno);
         const goSiteIndex = ap.index + 1;
         const realIndex   = (this.props.goInstance as GoBondsHelper).goIndexToRealIndex(goSiteIndex);
         //const a_str = `${ap.chainname}:${ap.resno}_${realIndex}`; // serial is not safe as it can be non consecutive
@@ -484,14 +485,14 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
     }
 
     if (g2) {
-      console.log(`g2 ("${g2}") atom selection data`)
+      debugLog(`g2 ("${g2}") atom selection data`)
       const index_to_residue: { [index: number]: number } = {};
       g2_ch_at_index = new Set();
 
       // Get all indexes of sites for g2
       if(this.props.mode === "go") {
         this.repr.iterateOverGoSitesOf(g2, ap => { // This loops over CA, only virtualsite       
-        console.log('[g2]', ap.index, ap.number, ap.serial, ap.atomname, ap.chainname, ap.resname, ap.resno);
+        debugLog('[g2]', ap.index, ap.number, ap.serial, ap.atomname, ap.chainname, ap.resname, ap.resno);
         const goSiteIndex = ap.index + 1;
         const realIndex   = (this.props.goInstance as GoBondsHelper).goIndexToRealIndex(goSiteIndex);
         const a_str = `${ap.chainname}:${realIndex}`;
@@ -524,9 +525,9 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
         return;
       }
     }
-    console.log(`[GoEditor:onSelectionMake]G1:G2`)
-    console.log(g1_ch_at_index);
-    console.log(g2_ch_at_index);
+    debugLog(`[GoEditor:onSelectionMake]G1:G2`)
+    debugLog(g1_ch_at_index);
+    debugLog(g2_ch_at_index);
 
    
     
@@ -544,8 +545,8 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
 
     const groupBonds = this.props.goInstance.matchBonds( predicate );
    
-    console.log("Bonds match");
-    console.log(groupBonds);
+    debugLog("Bonds match");
+    debugLog(groupBonds);
     const maxToCreate = !g2 ? ((g1_ch_at_index.size - 1) * g1_ch_at_index.size)/2 : g1_ch_at_index.size * g2_ch_at_index!.size;
     const countDoExist = groupBonds.length;
 
@@ -592,7 +593,7 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
   };
 
   onResetEditor = () => {
-    console.log("LETS RESTORE GO BONDS STATUS")
+    debugLog("LETS RESTORE GO BONDS STATUS")
     this.props.goInstance.restore('go');
     // setState ??
     // redraw
@@ -1010,7 +1011,7 @@ export default class GoEditor extends React.Component<GoEditorProps, GoEditorSta
             <Button color="primary" onClick={() => {
               this.setState({save_to_history:false})
               //this.props.onCancel(); 
-              console.log("no")
+              debugLog("no")
               }}>Cancel</Button>
             <Button color="secondary" onClick={() => {
               this.setState({save_to_history:false})

@@ -1,3 +1,4 @@
+import { debugDir, debugLog } from '../../logger';
 import React from "react";
 import { setPageTitle, errorToText, Marger, FaIcon } from "../../helpers";
 import { RouteComponentProps } from "react-router-dom";
@@ -174,8 +175,8 @@ export class ModalHistorySelector extends React.Component<MHSProps, any> {
 
       getHistory()
         .then((jobs) => {
-          console.log("getHistory");
-          console.dir(jobs);
+          debugLog("getHistory");
+          debugDir(jobs);
           if (this.props.ff) {
             const ff = this.props.ff;
             jobs = jobs.filter((j) => j?.settings.ff.startsWith(ff));
@@ -183,21 +184,21 @@ export class ModalHistorySelector extends React.Component<MHSProps, any> {
           this.setState({ jobs, loaded: true });
         })
         .catch((err) => {
-          console.log("OUPS");
+          debugLog("OUPS");
           this.setState({ oups: false });
         });
     }
   }
 
   async molecule_to_itp(obj: any) {
-    console.log("molecule to itp");
+    debugLog("molecule to itp");
     const forcefield = obj["settings"]["ff"];
     try {
       const res: any = await ApiHelper.request(`history/get?jobId=${obj.id}`);
       console.warn(
         `MyHistory:modalHistorySelector:molecule_to_itp: history/get?jobId=${obj.id}`,
       );
-      console.dir(res);
+      debugDir(res);
       if (!Object(res).hasOwnProperty("files"))
         throw new Error("History files not missing");
 
@@ -206,7 +207,7 @@ export class ModalHistorySelector extends React.Component<MHSProps, any> {
     } catch (e) {
       console.error(e);
       this.setState({ oups: true });
-      console.log("Error while loading molecules.");
+      debugLog("Error while loading molecules.");
     }
   }
 

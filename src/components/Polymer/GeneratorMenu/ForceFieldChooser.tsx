@@ -1,3 +1,4 @@
+import { debugLog } from '../../../logger';
 import * as React from "react";
 import Box from "@mui/material/Box";
 import InputLabel from "@mui/material/InputLabel";
@@ -35,11 +36,11 @@ interface FFCProps {
 export default function ForceFieldChooser(props: FFCProps) {
   const defaultTargetLib = Object.keys(props.environments).at(-1) as string;
   const [activeLib, setActiveLib] = React.useState(defaultTargetLib);
-  //console.log("FFC props", props.environments, "active is ", activeLib);
+  //debugLog("FFC props", props.environments, "active is ", activeLib);
 
   const [options, setOptions] = React.useState([] as string[]);
   const handleToggle = (value: string) => () => {
-    //console.log("FFC toggle " + value);
+    //debugLog("FFC toggle " + value);
     setActiveLib(value);
   };
 
@@ -103,11 +104,11 @@ export default function ForceFieldChooser(props: FFCProps) {
       <Marger size="1em" />
 
       <Button
-        sx={{ width: "75%" }}
+        sx={{ width: "75%", alignSelf: "center" }}
         variant="contained"
         endIcon={<SendIcon />}
         onClick={() => {
-          /*console.log("FFC fires", activeLib, [
+          /*debugLog("FFC fires", activeLib, [
             props.environments[activeLib][0],
             ...options,
           ]);*/
@@ -183,7 +184,7 @@ function CheckboxList(props: CBLprops) {
             <ListItemButton
               role={undefined}
               onClick={() => {
-                //console.log(props.active, props.name, value);
+                //debugLog(props.active, props.name, value);
                 if (props.active !== props.name) return;
                 handleToggle(value);
               }}

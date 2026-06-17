@@ -1,3 +1,4 @@
+import { debugLog } from "./logger";
 import ApiHelper from "./ApiHelper";
 import { User } from "./types/entities";
 import { SettingsJson } from "./types/settings";
@@ -98,8 +99,8 @@ export const Settings = new (class Settings {
           auth: false,
         });
         this._settings = settings;
-        console.warn("#SETTINGS");
-        console.log(settings);
+        debugLog("#SETTINGS");
+        debugLog(settings);
       } catch (e) {
         console.error(e);
         toast(
@@ -118,8 +119,8 @@ export const Settings = new (class Settings {
           auth: false,
         });
         this.bibliography = bibliography;
-        console.warn("#BIOIBLIO");
-        console.log(bibliography);
+        debugLog("#BIBLIO");
+        debugLog(bibliography);
       } catch (e) {
         console.error(e);
         toast(
@@ -165,7 +166,7 @@ export const Settings = new (class Settings {
     }).then(({ token, user }: { token: string; user: User }) => {
       this.token = token;
       this.user = user;
-      //console.log(user)
+      //debugLog(user)
       if (user.role === "admin") this._logged = LoginStatus.Admin;
       else if (user.role === "dev") this._logged = LoginStatus.Dev;
       else this._logged = LoginStatus.Curator;

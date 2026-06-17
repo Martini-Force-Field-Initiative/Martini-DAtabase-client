@@ -1,64 +1,68 @@
-import * as React from 'react';
-import { Box, Button, Grid, Input, TextField } from '@material-ui/core';
-import SendIcon from '@mui/icons-material/Send';
-import Stack from '@mui/material/Stack';
-import { Typography, MenuItem } from '@mui/material';
+import { debugLog } from "../../../logger";
+import * as React from "react";
+import { Box, Button, Grid, Input, TextField } from "@material-ui/core";
+import SendIcon from "@mui/icons-material/Send";
+import Stack from "@mui/material/Stack";
+import { Typography, MenuItem } from "@mui/material";
 import { TooltipedSelect } from "../../../ShareTT";
-import AddIcon from '@mui/icons-material/Add';
+import AddIcon from "@mui/icons-material/Add";
 
-import Timeline from '@mui/lab/Timeline';
-import TimelineItem from '@mui/lab/TimelineItem';
-import TimelineSeparator from '@mui/lab/TimelineSeparator';
-import TimelineConnector from '@mui/lab/TimelineConnector';
-import TimelineContent from '@mui/lab/TimelineContent';
-import TimelineDot from '@mui/lab/TimelineDot';
+import Timeline from "@mui/lab/Timeline";
+import TimelineItem from "@mui/lab/TimelineItem";
+import TimelineSeparator from "@mui/lab/TimelineSeparator";
+import TimelineConnector from "@mui/lab/TimelineConnector";
+import TimelineContent from "@mui/lab/TimelineContent";
+import TimelineDot from "@mui/lab/TimelineDot";
 
-import AdsClickIcon from '@mui/icons-material/AdsClick';
-import DesignServicesIcon from '@mui/icons-material/DesignServices';
+import AdsClickIcon from "@mui/icons-material/AdsClick";
+import DesignServicesIcon from "@mui/icons-material/DesignServices";
 
-import { styled, createTheme, ThemeProvider } from '@mui/material/styles';
+import { styled, createTheme, ThemeProvider } from "@mui/material/styles";
 
 import TimelineOppositeContent, {
-    timelineOppositeContentClasses,
-  } from '@mui/lab/TimelineOppositeContent';
+  timelineOppositeContentClasses,
+} from "@mui/lab/TimelineOppositeContent";
 
-import InputLabel from '@mui/material/InputLabel';
-import FormControl from '@mui/material/FormControl';
-import Select, { SelectChangeEvent } from '@mui/material/Select';
-import { Marger } from '../../../helpers';
+import InputLabel from "@mui/material/InputLabel";
+import FormControl from "@mui/material/FormControl";
+import Select, { SelectChangeEvent } from "@mui/material/Select";
+import { Marger } from "../../../helpers";
 
-import { lightGreen } from '@mui/material/colors';
+import { lightGreen } from "@mui/material/colors";
 
-
-type moleculeDatum = {id:string, name:string, url:string};
+type moleculeDatum = { id: string; name: string; url: string };
 interface MAProps {
-    molecules: Record<string, [string, string, string][]>;    
-    type:"injector" | "attacher";
-    onAddClick:(molecule:string, count:number, target:string|undefined)=>void;
-    targetLister?:()=>void;
-    disabled?:boolean;
-};
+  molecules: Record<string, [string, string, string][]>;
+  type: "injector" | "attacher";
+  onAddClick: (
+    molecule: string,
+    count: number,
+    target: string | undefined,
+  ) => void;
+  targetLister?: () => void;
+  onTargetChoice?: (resname: string) => void;
+  disabled?: boolean;
+}
 interface MAState {
-    molCount:number;
-    molecule?:moleculeDatum;
-    molAsStr:string;
-    showAdvanced:boolean
+  molCount: number;
+  molecule?: moleculeDatum;
+  molAsStr: string;
+  showAdvanced: boolean;
 }
 
-
 const customTheme = createTheme({
-    palette: {
-      primary: {
-        main: lightGreen[500],
-      },
+  palette: {
+    primary: {
+      main: lightGreen[500],
     },
-  });
-  
-  const StyledTimelineDot = styled(TimelineDot)`
-    ${({ theme }) => `
+  },
+});
+
+const StyledTimelineDot = styled(TimelineDot)`
+  ${({ theme }) => `
     cursor: pointer;
     background-color: "lightgreen";
-    transition: ${theme.transitions.create(['background-color', 'transform'], {
+    transition: ${theme.transitions.create(["background-color", "transform"], {
       duration: theme.transitions.duration.standard,
     })};
     &:hover {
@@ -66,11 +70,11 @@ const customTheme = createTheme({
       transform: scale(1.3);
     }
     `}
-  `;
+`;
 
-  const StyledAddButton = styled(Button)`
+const StyledAddButton = styled(Button)`
   ${({ theme }) => `
-  transition: ${theme.transitions.create(['background-color', 'transform'], {
+  transition: ${theme.transitions.create(["background-color", "transform"], {
     duration: theme.transitions.duration.standard,
   })};
   &:hover {
@@ -79,211 +83,224 @@ const customTheme = createTheme({
   `}
 `;
 
+export default function MoleculeAdder(props: MAProps) {
+  const [state, setState] = React.useState({
+    molCount: 0,
+    molecule: undefined,
+    molAsStr: "",
+    showAdvanced: false,
+  } as MAState); // {id:string, name:string, url:string}
+  const [isValid, setValid] = React.useState(false);
+  const [selTarget, setTarget] = React.useState("");
+  const [attachSteps, setAttachSteps] = React.useState([false, false, false]);
 
-export default function MoleculeAdder(props:MAProps) {
-    const [state, setState] =  React.useState({ molCount: 0, molecule: undefined, molAsStr:"", showAdvanced:false} as MAState); // {id:string, name:string, url:string}
-    const [isValid, setValid] = React.useState(false);
-    const [selTarget, setTarget] = React.useState('');
-    const [attachSteps, setAttachSteps ] = React.useState([false, false, false])
-
-    const generateSelector = () => {
-        return (<Box sx={{ minWidth: 120 }}>
+  const generateSelector = () => {
+    return (
+      <Box sx={{ minWidth: 120 }}>
         <FormControl fullWidth>
           <InputLabel id="demo-simple-select-label">Target Residue</InputLabel>
-          <Select            
+          <Select
             labelId="demo-simple-select-label"
             id="demo-simple-select"
             value={selTarget}
             label="targetResidue"
-            onChange={ (v) => {
-                console.log("Selector of " + v.target.value);
-                setTarget(v.target.value);
-                setAttachSteps([ true, attachSteps[1], attachSteps[2] ]);
-                }
-            }
+            onChange={(v) => {
+              props.onTargetChoice?.(v.target.value);
+              debugLog("Selector of " + v.target.value);
+              setTarget(v.target.value);
+              setAttachSteps([true, attachSteps[1], attachSteps[2]]);
+            }}
           >
-            {   //@ts-ignore
-                props?.targetLister().map( (m, i)=><MenuItem value={m} key={`madr_${i}`}>{m}</MenuItem>)
-               // Object.keys(props.molecules).map(m=><MenuItem value={m}>{m}</MenuItem>)
-            } 
+            {//@ts-ignore
+            props?.targetLister().map((m, i) => (
+              <MenuItem value={m} key={`madr_${i}`}>
+                {m}
+              </MenuItem>
+            ))
+            // Object.keys(props.molecules).map(m=><MenuItem value={m}>{m}</MenuItem>)
+            }
           </Select>
         </FormControl>
       </Box>
-        )
-    }
+    );
+  };
 
-    const generateDesigner = (type:"injector"|"attacher") => {
-        return (
-            <Stack
-            mt={1}
-            width={'100%'}               
-            direction='row'
-            spacing={1} 
-            style= {{
-                justifyContent:"center",                  
-            }}
-            >
-            <TooltipedSelect  
-                required             
-                label="Molecule"
-                variant="outlined"
-              
-                //@ts-ignore
-                values={ props.molecules }
-                id="ff"
-                key="ff"
-                value={state.molAsStr}
-                onChange={v => { 
-                    setState({ ...state, molAsStr: v } );
-                    if(type === "attacher")
-                        setAttachSteps([attachSteps[0], true, attachSteps[2]]);
-                    else 
-                        setValid(state.molCount > 0)                     
-             }}                                    
-            />
-            <TextField
-                label="Number"
-                type="number"
-                InputProps={{ inputProps: { min: 0, max: 9999 } }}
-                value={state.molCount}
-                onChange={(v) => {
-                    const cnt = parseInt(v.target.value);
-                    setState({ ...state, molCount: cnt });
-                    setValid(state.molAsStr !== '' && cnt > 0 )               
-
-                    if(type === "attacher")
-                        setAttachSteps([attachSteps[0], attachSteps[1], parseInt(v.target.value) > 0]);
-
-                }}
-                variant="outlined"
-            />
-            { (type === "injector" && isValid) &&                   
-                <StyledAddButton
-                style={{borderTopRightRadius: 28, borderBottomRightRadius: 28,backgroundColor:'dodgerblue'}}
-                onClick={ ()=>{ props.onAddClick(state.molAsStr, state.molCount, undefined)} }
-                >
-                <AddIcon />
-                </StyledAddButton>
-            }
-            { (type === "injector" && !isValid) &&                   
-                <Button
-                disabled={true}
-                style={{ borderTopRightRadius: 28, borderBottomRightRadius: 28, backgroundColor:'lightgrey' }}                
-                >
-                    <AddIcon />
-                </Button>
-            }
-
-        </Stack>
-        )
-    }
-
-
-    if (props.type === "injector")
+  const generateDesigner = (type: "injector" | "attacher") => {
     return (
-        <Box sx={{ width: '100%', textAlign: "center" }}>
-           
-            {
-                generateDesigner(props.type)
-            }
-            <Marger size='0.5rem'/>
-            <Typography                
-                variant="body1" align="center" color='primary'
-            >
-            Please choose a building block type and a copy number and add them to your current molecule.
+      <Stack
+        mt={1}
+        width={"100%"}
+        direction="row"
+        spacing={1}
+        style={{
+          justifyContent: "center",
+        }}
+      >
+        <TooltipedSelect
+          required
+          label="Molecule"
+          variant="outlined"
+          //@ts-ignore
+          values={props.molecules}
+          id="ff"
+          key="ff"
+          value={state.molAsStr}
+          onChange={(v) => {
+            setState({ ...state, molAsStr: v });
+            if (type === "attacher")
+              setAttachSteps([attachSteps[0], true, attachSteps[2]]);
+            else setValid(state.molCount > 0);
+          }}
+        />
+        <TextField
+          label="Number"
+          type="number"
+          InputProps={{ inputProps: { min: 0, max: 9999 } }}
+          value={state.molCount}
+          onChange={(v) => {
+            const cnt = parseInt(v.target.value);
+            setState({ ...state, molCount: cnt });
+            setValid(state.molAsStr !== "" && cnt > 0);
+
+            if (type === "attacher")
+              setAttachSteps([
+                attachSteps[0],
+                attachSteps[1],
+                parseInt(v.target.value) > 0,
+              ]);
+          }}
+          variant="outlined"
+        />
+        {type === "injector" && isValid && (
+          <StyledAddButton
+            style={{
+              borderTopRightRadius: 28,
+              borderBottomRightRadius: 28,
+              backgroundColor: "dodgerblue",
+            }}
+            onClick={() => {
+              props.onAddClick(state.molAsStr, state.molCount, undefined);
+            }}
+          >
+            <AddIcon />
+          </StyledAddButton>
+        )}
+        {type === "injector" && !isValid && (
+          <Button
+            disabled={true}
+            style={{
+              borderTopRightRadius: 28,
+              borderBottomRightRadius: 28,
+              backgroundColor: "lightgrey",
+            }}
+          >
+            <AddIcon />
+          </Button>
+        )}
+      </Stack>
+    );
+  };
+
+  if (props.type === "injector")
+    return (
+      <Box sx={{ width: "100%", textAlign: "center" }}>
+        {generateDesigner(props.type)}
+        <Marger size="0.5rem" />
+        <Typography variant="body1" align="center" color="primary">
+          Please choose a building block type and a copy number and add them to
+          your current molecule.
+        </Typography>
+      </Box>
+    );
+
+  return (
+    <Stack direction={"column"}>
+      <Box sx={{ width: "100%", textAlign: "center" }}>
+        <Typography variant="body1" align="center" color="primary">
+          Follow these steps to attach identical linear polymer(s) to target
+          site(s)
+        </Typography>
+      </Box>
+
+      <Timeline
+        sx={{
+          [`& .${timelineOppositeContentClasses.root}`]: {
+            flex: 0.2,
+          },
+        }}
+      >
+        <TimelineItem>
+          <TimelineOppositeContent color="textSecondary">
+            <Typography variant="h6" component="span">
+              Select
             </Typography>
-
-        </Box>
-    )
-
-    return (
-        <Stack direction={"column"}>
-        <Box sx={{ width: '100%', textAlign: "center" }}>
-            <Typography                
-                variant="body1" align="center" color="primary"
+            <Typography>Available residue type</Typography>
+          </TimelineOppositeContent>
+          <TimelineSeparator>
+            <TimelineConnector sx={{ minHeight: 25 }} />
+            <TimelineDot color={attachSteps[0] ? "success" : "grey"}>
+              <AdsClickIcon />
+            </TimelineDot>
+            <TimelineConnector sx={{ minHeight: 50 }} />
+          </TimelineSeparator>
+          <TimelineContent mt={3}>{generateSelector()}</TimelineContent>
+        </TimelineItem>
+        <TimelineItem>
+          <TimelineOppositeContent color="textSecondary">
+            <Typography variant="h6" component="span" sx={{ marginTop: -10 }}>
+              Design
+            </Typography>
+            <Typography>polymer to attach</Typography>
+          </TimelineOppositeContent>
+          <TimelineSeparator>
+            <TimelineDot
+              color={attachSteps[1] && attachSteps[2] ? "success" : "grey"}
             >
-                Follow these steps to attach identical linear polymer(s) to target site(s)
-            </Typography> 
-        </Box>
-        
-        <Timeline
-            sx={{
-                [`& .${timelineOppositeContentClasses.root}`]: {
-                flex: 0.2,
-                },
-            }}
-        >
-            <TimelineItem>
-                <TimelineOppositeContent color="textSecondary">
-                    <Typography variant="h6" component="span">
-                        Select
-                    </Typography>
-                    <Typography>Available residue type</Typography>
-                </TimelineOppositeContent>
-                <TimelineSeparator>
-                    <TimelineConnector sx={{minHeight:25}}/>
-                        <TimelineDot
-                            color={ (attachSteps[0]) ? 'success' : 'grey' }
-                        ><AdsClickIcon /></TimelineDot>
-                    <TimelineConnector sx={{minHeight:50}}/>
-                </TimelineSeparator>
-                <TimelineContent mt={3}>
-                    { generateSelector() }
-                </TimelineContent>
-            </TimelineItem>
-            <TimelineItem>
-                <TimelineOppositeContent color="textSecondary">
-                    <Typography variant="h6" component="span" sx={{ marginTop:-10}}>
-                        Design
-                    </Typography>
-                    <Typography>polymer to attach</Typography>
-                </TimelineOppositeContent>
-                <TimelineSeparator>
-                    <TimelineDot 
-                        color={ (attachSteps[1] && attachSteps[2]) ? 'success' : 'grey' }
-                    >
-                        <DesignServicesIcon />
-                    </TimelineDot>
-                </TimelineSeparator>
-                <TimelineContent mt={-1}>
-                    {generateDesigner("attacher")}        
-                </TimelineContent>
-            </TimelineItem>
-            <TimelineItem>
-                <TimelineOppositeContent color="textSecondary">
-                   {/* <Box sx={{minWidth:62}}/>*/}
-                   <Box paddingTop='1.25rem'>
-                   <Typography variant="h6" component="span" sx={{ marginTop:-10}}>
-                        Add
-                    </Typography>
-                    </Box>
-                    {/*<Typography>current polymer </Typography>*/}
-                </TimelineOppositeContent>
-                <TimelineSeparator>
-                    <TimelineConnector sx={{ minHeight:30, marginTop:-7}}/>
-                    { (attachSteps[0] && (attachSteps[1], attachSteps[2])) ?  
-                        <StyledTimelineDot 
-                            color="info" sx={{ boxShadow: 5, cursor:"grab" }}
-                        >
-                            <AddIcon 
-                            onClick={ ()=>{ props.onAddClick(state.molAsStr, state.molCount, selTarget) } }
-                            />
-                        </StyledTimelineDot>
-                    :
-                        <TimelineDot 
-                            color="grey" sx={{ boxShadow: 0, cursor:"pointer" }}
-                        >
-                            <AddIcon/>
-                        </TimelineDot>
-                    }              
-                </TimelineSeparator>
-                <TimelineContent></TimelineContent>
-            </TimelineItem> 
-        </Timeline>
+              <DesignServicesIcon />
+            </TimelineDot>
+          </TimelineSeparator>
+          <TimelineContent mt={-1}>
+            {generateDesigner("attacher")}
+          </TimelineContent>
+        </TimelineItem>
+        <TimelineItem>
+          <TimelineOppositeContent color="textSecondary">
+            {/* <Box sx={{minWidth:62}}/>*/}
+            <Box paddingTop="1.25rem">
+              <Typography variant="h6" component="span" sx={{ marginTop: -10 }}>
+                Add
+              </Typography>
+            </Box>
+            {/*<Typography>current polymer </Typography>*/}
+          </TimelineOppositeContent>
+          <TimelineSeparator>
+            <TimelineConnector sx={{ minHeight: 30, marginTop: -7 }} />
+            {attachSteps[0] && (attachSteps[1], attachSteps[2]) ? (
+              <StyledTimelineDot
+                color="info"
+                sx={{ boxShadow: 5, cursor: "grab" }}
+              >
+                <AddIcon
+                  onClick={() => {
+                    props.onAddClick(state.molAsStr, state.molCount, selTarget);
+                  }}
+                />
+              </StyledTimelineDot>
+            ) : (
+              <TimelineDot
+                color="grey"
+                sx={{ boxShadow: 0, cursor: "pointer" }}
+              >
+                <AddIcon />
+              </TimelineDot>
+            )}
+          </TimelineSeparator>
+          <TimelineContent></TimelineContent>
+        </TimelineItem>
+      </Timeline>
     </Stack>
-   )
+  );
 }
-
 
 /* Mine
 { !state.showAdvanced ? (
@@ -293,10 +310,10 @@ export default function MoleculeAdder(props:MAProps) {
                 >
                 Advanced
                 </Button>
-            ) : ( 
+            ) : (
                 <>
                 <Typography>
-                Attach homomultimer to monomer(s) of the following type 
+                Attach homomultimer to monomer(s) of the following type
                 </Typography>
                 <TextField
                     style={{ width: "100%" }}
@@ -329,7 +346,7 @@ export default function MoleculeAdder(props:MAProps) {
 
 */
 
-    /*
+/*
 
 <Grid item xs={10} style={{ textAlign: 'left', alignItems: 'center', justifyContent: 'center', }}>
 <Typography variant="h6" align="left">
@@ -351,10 +368,10 @@ export default function MoleculeAdder(props:MAProps) {
   // values={this.GetMolFField(this.props.dataForceFieldMolecule, forcefield).map(e => ({ id: e, name: e }))}
   // @ts-ignore
   /*values={ Object.entries(this.props.dataForceFieldMolecule[this.state.forcefield]).map( (e) =>{
-        return { id: e[0], name: e[1][0], url:e[1][1] } }) 
+        return { id: e[0], name: e[1][0], url:e[1][1] } })
   }*/
-  //@ts-ignore
-  /*values = {this.props.dataForceFieldMolecule[this.state.forcefield]}
+//@ts-ignore
+/*values = {this.props.dataForceFieldMolecule[this.state.forcefield]}
   id="ff"
   key="ff"
   value={this.state.moleculeToAdd}
